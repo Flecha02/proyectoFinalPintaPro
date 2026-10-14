@@ -9,7 +9,7 @@ export default function LoginPage() {
       <div className="absolute inset-0 flex">
         <div className="w-1/2 bg-[#4285F4] relative flex items-center justify-start">
           {/* Ilustración de la lata de pintura izquierda */}
-          <div className="relative w-64 h-64">
+          <div className="relative w-100 h-100">
             <Image 
               src="/cubeta.png" 
               alt="Pintura" 
@@ -20,7 +20,7 @@ export default function LoginPage() {
         </div>
         <div className="w-1/2 bg-[#F4C430] relative flex items-center justify-end">
           {/* Ilustración de la rodillo/bandeja derecha */}
-          <div className="relative w-64 h-64">
+          <div className="relative w-100 h-100">
             <Image 
               src="/bandeja.png" 
               alt="Bandeja" 
@@ -36,7 +36,7 @@ export default function LoginPage() {
         <h1 className="text-xl font-bold text-gray-800 mb-2">Bienvenido a</h1>
         
         {/* Logo PintaPro */}
-        <div className="relative w-40 h-16 mb-6">
+        <div className="relative w-30 h-30 mb-6">
           <Image 
             src="/PintaPro.png" 
             alt="PintaPro Logo" 
