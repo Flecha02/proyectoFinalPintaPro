@@ -34,6 +34,13 @@ export default function CajeroPage() {
     { id: 5, codigo: 'P005', nombre: 'Thinner Estándar', categoria: 'Solventes', marca: 'SolventX', color: 'N/A', presentacion: 'Litro', precio: 35.00 },
   ]);
 
+  // Clientes para la búsqueda por NIT
+  const [clientesRegistrados] = useState([
+    { nit: '1234567-8', nombre: 'Juan', apellido: 'Pérez', telefono: '5555-1234', direccion: 'Zona 1, Quetzaltenango' },
+    { nit: '9876543-2', nombre: 'María', apellido: 'López', telefono: '7761-4321', direccion: 'Zona 3, Quetzaltenango' },
+    { nit: 'CF', nombre: 'Consumidor', apellido: 'Final', telefono: 'N/A', direccion: 'Ciudad' },
+  ]);
+
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todos');
   const [busqueda, setBusqueda] = useState('');
   const [orden, setOrden] = useState<ItemOrden[]>([]);
@@ -41,6 +48,8 @@ export default function CajeroPage() {
   // Estados para Cotización y Cliente
   const [modalCotizacion, setModalCotizacion] = useState(false);
   const [pasoConfirmacion, setPasoConfirmacion] = useState(false);
+  const [nitBusqueda, setNitBusqueda] = useState('');
+  const [clienteEncontrado, setClienteEncontrado] = useState(false);
   const [datosCliente, setDatosCliente] = useState({
     nombre: '',
     apellido: '',
@@ -49,7 +58,7 @@ export default function CajeroPage() {
     telefono: '',
   });
 
-  // Estados para el Modal de Cobro y Métodos de Pago
+  // Estados para el Modal de Cobro
   const [modalCobro, setModalCobro] = useState(false);
   const [metodoPago, setMetodoPago] = useState<'efectivo' | 'tarjeta' | 'cheque'>('efectivo');
   const [montoPagado, setMontoPagado] = useState<number | string>('');
@@ -106,9 +115,38 @@ export default function CajeroPage() {
     return coincideCategoria && coincideBusqueda;
   });
 
+  // Buscar cliente por NIT
+  const buscarClientePorNit = () => {
+    const encontrado = clientesRegistrados.find((c) => c.nit.trim().toLowerCase() === nitBusqueda.trim().toLowerCase());
+    
+    if (encontrado) {
+      setDatosCliente({
+        nombre: encontrado.nombre,
+        apellido: encontrado.apellido,
+        nit: encontrado.nit,
+        direccion: encontrado.direccion,
+        telefono: encontrado.telefono,
+      });
+      setClienteEncontrado(true);
+    } else {
+      alert('Cliente no encontrado. Puede ingresar los datos para registrar un nuevo cliente.');
+      setDatosCliente({ nombre: '', apellido: '', nit: nitBusqueda, direccion: '', telefono: '' });
+      setClienteEncontrado(false);
+    }
+  };
+
+  const prepararNuevoCliente = () => {
+    setNitBusqueda('');
+    setDatosCliente({ nombre: '', apellido: '', nit: '', direccion: '', telefono: '' });
+    setClienteEncontrado(false);
+  };
+
   // Funciones de Cotización
   const abrirModalCotizacion = () => {
     setPasoConfirmacion(false);
+    setNitBusqueda('');
+    setClienteEncontrado(false);
+    setDatosCliente({ nombre: '', apellido: '', nit: '', direccion: '', telefono: '' });
     setModalCotizacion(true);
   };
 
@@ -189,11 +227,11 @@ export default function CajeroPage() {
           
           {/* Pestañas de Categoría */}
           <div className="flex gap-2 overflow-x-auto pb-2">
-            {['Todos', 'Pintura','Barniz', 'Solventes', 'Accesorios'].map((cat) => (
+            {['Todos', 'Pintura', 'Barniz', 'Solventes', 'Accesorios'].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategoriaSeleccionada(cat)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
                   categoriaSeleccionada === cat 
                     ? 'bg-[#1e3a8a] text-white shadow' 
                     : 'bg-white text-gray-600 hover:bg-gray-100 border'
@@ -325,7 +363,6 @@ export default function CajeroPage() {
             📋 Generar Cotización
           </button>
 
-          {/* BOTÓN COBRAR (Abre el Modal de Pago) */}
           <button 
             disabled={orden.length === 0}
             onClick={abrirModalCobro}
@@ -339,7 +376,7 @@ export default function CajeroPage() {
       {/* 4. MODAL DE COTIZACIÓN Y DATOS DEL CLIENTE */}
       {modalCotizacion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 border relative animate-in fade-in zoom-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6 border relative animate-in fade-in zoom-in duration-200">
             
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <div>
@@ -392,92 +429,133 @@ export default function CajeroPage() {
                 </div>
               </>
             ) : (
-              <form onSubmit={handleConfirmarFinalCotizacion} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-4">
+                
+                {/* Búsqueda por NIT */}
+                <div className="bg-gray-50 p-3 rounded-xl border space-y-2">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-bold text-gray-700 uppercase">Buscar Cliente Existente</span>
+                    <button 
+                      type="button" 
+                      onClick={prepararNuevoCliente}
+                      className="text-xs text-blue-700 hover:underline font-bold"
+                    >
+                      + Registrar Nuevo Cliente
+                    </button>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Ingrese NIT (ej. 1234567-8 o CF)"
+                      value={nitBusqueda}
+                      onChange={(e) => setNitBusqueda(e.target.value)}
+                      className="input input-bordered input-sm flex-1 text-gray-900 bg-white"
+                    />
+                    <button 
+                      type="button" 
+                      onClick={buscarClientePorNit}
+                      className="btn btn-sm bg-[#1e3a8a] hover:bg-blue-900 text-white font-bold border-none"
+                    >
+                      🔍 Buscar
+                    </button>
+                  </div>
+
+                  {clienteEncontrado && (
+                    <p className="text-[11px] font-bold text-green-700 bg-green-50 px-2 py-1 rounded border border-green-200">
+                      ✓ Cliente encontrado en la base de datos.
+                    </p>
+                  )}
+                </div>
+
+                {/* Formulario Datos del Cliente */}
+                <form onSubmit={handleConfirmarFinalCotizacion} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 uppercase">Nombre</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="Ej. Juan"
+                        value={datosCliente.nombre}
+                        onChange={(e) => setDatosCliente({...datosCliente, nombre: e.target.value})}
+                        className="input input-bordered input-sm w-full text-gray-900 bg-gray-50 mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 uppercase">Apellido</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="Ej. Pérez"
+                        value={datosCliente.apellido}
+                        onChange={(e) => setDatosCliente({...datosCliente, apellido: e.target.value})}
+                        className="input input-bordered input-sm w-full text-gray-900 bg-gray-50 mt-1"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 uppercase">NIT</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="Ej. 1234567-8"
+                        value={datosCliente.nit}
+                        onChange={(e) => setDatosCliente({...datosCliente, nit: e.target.value})}
+                        className="input input-bordered input-sm w-full text-gray-900 bg-gray-50 mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 uppercase">Teléfono</label>
+                      <input 
+                        type="tel" 
+                        required
+                        placeholder="Ej. 5555-1234"
+                        value={datosCliente.telefono}
+                        onChange={(e) => setDatosCliente({...datosCliente, telefono: e.target.value})}
+                        className="input input-bordered input-sm w-full text-gray-900 bg-gray-50 mt-1"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="text-xs font-bold text-gray-700 uppercase">Nombre</label>
+                    <label className="text-xs font-bold text-gray-700 uppercase">Dirección</label>
                     <input 
                       type="text" 
                       required
-                      placeholder="Ej. Juan"
-                      value={datosCliente.nombre}
-                      onChange={(e) => setDatosCliente({...datosCliente, nombre: e.target.value})}
+                      placeholder="Ej. Zona 1, Quetzaltenango"
+                      value={datosCliente.direccion}
+                      onChange={(e) => setDatosCliente({...datosCliente, direccion: e.target.value})}
                       className="input input-bordered input-sm w-full text-gray-900 bg-gray-50 mt-1"
                     />
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 uppercase">Apellido</label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="Ej. Pérez"
-                      value={datosCliente.apellido}
-                      onChange={(e) => setDatosCliente({...datosCliente, apellido: e.target.value})}
-                      className="input input-bordered input-sm w-full text-gray-900 bg-gray-50 mt-1"
-                    />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 uppercase">NIT</label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="Ej. 1234567-8"
-                      value={datosCliente.nit}
-                      onChange={(e) => setDatosCliente({...datosCliente, nit: e.target.value})}
-                      className="input input-bordered input-sm w-full text-gray-900 bg-gray-50 mt-1"
-                    />
+                  <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
+                    <button 
+                      type="button"
+                      onClick={() => setPasoConfirmacion(false)} 
+                      className="btn btn-sm bg-gray-200 hover:bg-gray-300 text-gray-800 border-none font-semibold"
+                    >
+                      Volver
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="btn btn-sm bg-[#1e3a8a] hover:bg-blue-900 text-white font-bold border-none shadow px-5"
+                    >
+                      💾 Finalizar Cotización
+                    </button>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 uppercase">Teléfono</label>
-                    <input 
-                      type="tel" 
-                      required
-                      placeholder="Ej. 5555-1234"
-                      value={datosCliente.telefono}
-                      onChange={(e) => setDatosCliente({...datosCliente, telefono: e.target.value})}
-                      className="input input-bordered input-sm w-full text-gray-900 bg-gray-50 mt-1"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-gray-700 uppercase">Dirección</label>
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="Ej. Zona 1, Quetzaltenango"
-                    value={datosCliente.direccion}
-                    onChange={(e) => setDatosCliente({...datosCliente, direccion: e.target.value})}
-                    className="input input-bordered input-sm w-full text-gray-900 bg-gray-50 mt-1"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
-                  <button 
-                    type="button"
-                    onClick={() => setPasoConfirmacion(false)} 
-                    className="btn btn-sm bg-gray-200 hover:bg-gray-300 text-gray-800 border-none font-semibold"
-                  >
-                    Volver
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="btn btn-sm bg-[#1e3a8a] hover:bg-blue-900 text-white font-bold border-none shadow px-5"
-                  >
-                    💾 Finalizar Cotización
-                  </button>
-                </div>
-              </form>
+                </form>
+              </div>
             )}
 
           </div>
         </div>
       )}
 
-      {/* 5. MODAL DE PROCESAMIENTO DE PAGO / MÉTODOS DE PAGO */}
+      {/* 5. MODAL DE PROCESAMIENTO DE PAGO */}
       {modalCobro && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 border relative animate-in fade-in zoom-in duration-200">
@@ -534,7 +612,7 @@ export default function CajeroPage() {
                 </div>
               </div>
 
-              {/* Detalle dinámico según Método de Pago */}
+              {/* Detalle según Método de Pago */}
               {metodoPago === 'efectivo' && (
                 <div className="bg-gray-50 p-4 rounded-xl border space-y-3">
                   <div>
