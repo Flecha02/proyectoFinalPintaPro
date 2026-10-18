@@ -167,15 +167,6 @@ export default function ProductosDashboard() {
             >
               + Agregar Producto
             </button>
-
-            <button 
-      onClick={handleCerrarSesion}
-      className="btn btn-sm bg-red-600 hover:bg-red-700 text-white font-semibold border-none shadow px-4"
-    >
-      Cerrar Sesión
-    </button>
-
-    
           </div>
         </header>
 
