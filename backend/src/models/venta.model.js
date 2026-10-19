@@ -79,8 +79,8 @@ async function obtenerCotizacionPorId(idCotizacion) {
 // --- FACTURACIÓN CON LÓGICA FIFO ---
 
 async function procesarFacturaFIFO(idCotizacion, idCliente, idUsuario, numeroFactura, totalFactura, detalles, pagos) {
+    const connection = await pool.getConnection();
     try {
-        // Convertir arreglos a string JSON para el Stored Procedure
         const jsonDetalles = JSON.stringify(detalles);
         const jsonPagos = JSON.stringify(pagos);
 
@@ -88,7 +88,7 @@ async function procesarFacturaFIFO(idCotizacion, idCliente, idUsuario, numeroFac
             CALL sp_ProcesarFacturaFIFO(?, ?, ?, ?, ?, ?, ?, @p_idFactura);
         `;
         
-        await pool.query(query, [
+        await connection.query(query, [
             idCotizacion || null,
             idCliente,
             idUsuario,
@@ -98,10 +98,12 @@ async function procesarFacturaFIFO(idCotizacion, idCliente, idUsuario, numeroFac
             jsonPagos
         ]);
 
-        const [resultId] = await pool.query('SELECT @p_idFactura AS idFactura');
+        const [resultId] = await connection.query('SELECT @p_idFactura AS idFactura');
         return resultId[0].idFactura;
     } catch (error) {
         throw error;
+    } finally {
+        connection.release();
     }
 }
 

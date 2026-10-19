@@ -18,7 +18,17 @@ async function listarMedidas(req, res) {
     }
 }
 
+async function listarUbicaciones(req, res) {
+    try {
+        const [rows] = await pool.query('SELECT * FROM UbicacionBodega ORDER BY idUbicacionBodega');
+        res.json({ status: 'success', data: rows });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+}
+
 module.exports = {
     listarCategorias,
-    listarMedidas
+    listarMedidas,
+    listarUbicaciones
 };

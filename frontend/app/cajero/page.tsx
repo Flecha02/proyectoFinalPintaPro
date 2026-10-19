@@ -1,8 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import {
+  buscarClientes,
+  emitirFactura,
+  listarProductos,
+  obtenerFacturaParaImpresion,
+  registrarCliente,
+  registrarCotizacion,
+} from '../../lib/api';
 
 interface Producto {
   id: number;
@@ -22,24 +30,32 @@ interface ItemOrden extends Producto {
 export default function CajeroPage() {
   const router = useRouter();
 
-  // Nombre del Cajero activo
-  const [nombreCajero] = useState('María Ponciano');
+  // Nombre del usuario autenticado
+  const [nombreCajero] = useState(() => {
+    if (typeof window === 'undefined') return 'Usuario';
+
+    const usuarioGuardado = localStorage.getItem('usuario');
+    if (!usuarioGuardado) return 'Usuario';
+
+    try {
+      const usuario = JSON.parse(usuarioGuardado);
+      return typeof usuario?.nombreUsuario === 'string' && usuario.nombreUsuario.trim()
+        ? usuario.nombreUsuario
+        : 'Usuario';
+    } catch {
+      return 'Usuario';
+    }
+  });
 
   // Catálogo de Productos
-  const [productos] = useState<Producto[]>([
+  const [productos, setProductos] = useState<Producto[]>([
     { id: 1, codigo: 'P001', nombre: 'Pintura Acrílica Vinil', categoria: 'Vinil', marca: 'PintaPro', color: 'Azul Rey', presentacion: 'Galón', precio: 125.00 },
     { id: 2, codigo: 'P002', nombre: 'Barniz Marina', categoria: 'Barniz', marca: 'LacaPlus', color: 'N/A', presentacion: 'Litro', precio: 85.50 },
     { id: 3, codigo: 'P003', nombre: 'Brocha Profesional 3"', categoria: 'Accesorios', marca: 'ProBrush', color: 'N/A', presentacion: 'N/A', precio: 25.00 },
     { id: 4, codigo: 'P004', nombre: 'Pintura de Aceite Brillante', categoria: 'Aceite', marca: 'PintaPro', color: 'Blanco', presentacion: 'Galón', precio: 140.00 },
     { id: 5, codigo: 'P005', nombre: 'Thinner Estándar', categoria: 'Solventes', marca: 'SolventX', color: 'N/A', presentacion: 'Litro', precio: 35.00 },
   ]);
-
-  // Clientes para la búsqueda por NIT
-  const [clientesRegistrados] = useState([
-    { nit: '1234567-8', nombre: 'Juan', apellido: 'Pérez', telefono: '5555-1234', direccion: 'Zona 1, Quetzaltenango' },
-    { nit: '9876543-2', nombre: 'María', apellido: 'López', telefono: '7761-4321', direccion: 'Zona 3, Quetzaltenango' },
-    { nit: 'CF', nombre: 'Consumidor', apellido: 'Final', telefono: 'N/A', direccion: 'Ciudad' },
-  ]);
+  const [cargandoProductos, setCargandoProductos] = useState(true);
 
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todos');
   const [busqueda, setBusqueda] = useState('');
@@ -60,8 +76,33 @@ export default function CajeroPage() {
 
   // Estados para el Modal de Cobro
   const [modalCobro, setModalCobro] = useState(false);
-  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'tarjeta' | 'cheque'>('efectivo');
+  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'tarjeta' | 'transferencia'>('efectivo');
   const [montoPagado, setMontoPagado] = useState<number | string>('');
+  const [idCotizacion, setIdCotizacion] = useState<number | undefined>();
+  const [procesando, setProcesando] = useState(false);
+  const [mensajeError, setMensajeError] = useState('');
+  const [numeroFactura, setNumeroFactura] = useState('');
+  const [referenciaPago, setReferenciaPago] = useState('');
+
+  useEffect(() => {
+    listarProductos()
+      .then(({ data }) => {
+        setProductos(data.map((producto) => ({
+          id: producto.idProducto,
+          codigo: producto.codigoProducto,
+          nombre: producto.nombreProducto,
+          categoria: producto.nombreCategoria,
+          marca: producto.marcaProducto,
+          color: producto.colorProducto || 'N/A',
+          presentacion: producto.descripcionMedida,
+          precio: Number(producto.precioVentaProducto),
+        })));
+      })
+      .catch((error) => {
+        setMensajeError(error instanceof Error ? error.message : 'No se pudo cargar el catálogo');
+      })
+      .finally(() => setCargandoProductos(false));
+  }, []);
 
   // Cierre de sesión
   const handleCerrarSesion = () => {
@@ -117,22 +158,27 @@ export default function CajeroPage() {
 
   // Buscar cliente por NIT
   const buscarClientePorNit = () => {
-    const encontrado = clientesRegistrados.find((c) => c.nit.trim().toLowerCase() === nitBusqueda.trim().toLowerCase());
-    
-    if (encontrado) {
-      setDatosCliente({
-        nombre: encontrado.nombre,
-        apellido: encontrado.apellido,
-        nit: encontrado.nit,
-        direccion: encontrado.direccion,
-        telefono: encontrado.telefono,
-      });
-      setClienteEncontrado(true);
-    } else {
-      alert('Cliente no encontrado. Puede ingresar los datos para registrar un nuevo cliente.');
-      setDatosCliente({ nombre: '', apellido: '', nit: nitBusqueda, direccion: '', telefono: '' });
-      setClienteEncontrado(false);
-    }
+    setMensajeError('');
+    buscarClientes(nitBusqueda)
+      .then(({ data }) => {
+        const encontrado = data[0];
+        if (!encontrado) {
+          setClienteEncontrado(false);
+          setDatosCliente({ nombre: '', apellido: '', nit: nitBusqueda, direccion: '', telefono: '' });
+          alert('Cliente no encontrado. Puede ingresar los datos para registrar un nuevo cliente.');
+          return;
+        }
+        const nombres = encontrado.nombreCliente.trim().split(/\s+/);
+        setDatosCliente({
+          nombre: nombres[0] || '',
+          apellido: nombres.slice(1).join(' '),
+          nit: encontrado.nitCliente,
+          direccion: encontrado.direccionCliente || '',
+          telefono: encontrado.telefonoCliente || '',
+        });
+        setClienteEncontrado(true);
+      })
+      .catch((error) => setMensajeError(error instanceof Error ? error.message : 'No se pudo buscar el cliente'));
   };
 
   const prepararNuevoCliente = () => {
@@ -155,24 +201,229 @@ export default function CajeroPage() {
     setPasoConfirmacion(false);
   };
 
-  const handleConfirmarFinalCotizacion = (e: React.FormEvent) => {
+  const obtenerUsuarioActivo = () => {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+    if (!usuario?.idUsuario) {
+      throw new Error('La sesión no contiene un usuario válido. Inicia sesión nuevamente.');
+    }
+    return Number(usuario.idUsuario);
+  };
+
+  const obtenerORegistrarCliente = async (clienteDatos = datosCliente) => {
+    const clientes = await buscarClientes(clienteDatos.nit);
+    const existente = clientes.data.find(
+      (cliente) => cliente.nitCliente.toLowerCase() === clienteDatos.nit.trim().toLowerCase(),
+    );
+    if (existente) return existente.idCliente;
+
+    const cliente = await registrarCliente({
+      nitCliente: clienteDatos.nit,
+      nombreCliente: `${clienteDatos.nombre} ${clienteDatos.apellido}`.trim(),
+      telefonoCliente: clienteDatos.telefono,
+      direccionCliente: clienteDatos.direccion,
+    });
+    return cliente.data.idCliente;
+  };
+
+  const handleConfirmarFinalCotizacion = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`¡Cotización generada exitosamente!\n\nCliente: ${datosCliente.nombre} ${datosCliente.apellido}\nNIT: ${datosCliente.nit}\nTeléfono: ${datosCliente.telefono}\nTotal: Q ${total.toFixed(2)}`);
-    cerrarModalCotizacion();
+    setProcesando(true);
+    setMensajeError('');
+    try {
+      const idCliente = await obtenerORegistrarCliente();
+      const respuesta = await registrarCotizacion({
+        idCliente,
+        idUsuario: obtenerUsuarioActivo(),
+        totalCotizacion: total,
+        detalles: orden.map((item) => ({
+          idProducto: item.id,
+          cantidadCotizada: item.cantidad,
+          precioCotizado: item.precio,
+          subtotalCotizado: item.precio * item.cantidad,
+        })),
+      });
+      setIdCotizacion(respuesta.data.idCotizacion);
+      cerrarModalCotizacion();
+      alert(`Cotización ${respuesta.data.idCotizacion} generada exitosamente.`);
+    } catch (error) {
+      setMensajeError(error instanceof Error ? error.message : 'No se pudo generar la cotización');
+    } finally {
+      setProcesando(false);
+    }
   };
 
   // Funciones de Cobro
   const abrirModalCobro = () => {
     setMetodoPago('efectivo');
     setMontoPagado(total);
+    setNumeroFactura(`FAC-${Date.now()}`);
+    setReferenciaPago('');
+    setMensajeError('');
+    if (!datosCliente.nit) {
+      setDatosCliente({
+        nombre: 'Consumidor',
+        apellido: 'Final',
+        nit: 'CF',
+        direccion: 'Ciudad',
+        telefono: '',
+      });
+    }
     setModalCobro(true);
   };
 
-  const handleProcesarCobroFinal = (e: React.FormEvent) => {
+  const handleProcesarCobroFinal = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`¡Cobro Procesado Con Éxito!\n\nMétodo de Pago: ${metodoPago.toUpperCase()}\nTotal Cobrado: Q ${total.toFixed(2)}\nAtendido por: ${nombreCajero}`);
-    setOrden([]);
-    setModalCobro(false);
+    if (metodoPago === 'efectivo' && Number(montoPagado) < total) return;
+    setProcesando(true);
+    setMensajeError('');
+    try {
+      const clienteParaCobro = datosCliente.nit
+        ? datosCliente
+        : {
+            nombre: 'Consumidor',
+            apellido: 'Final',
+            nit: 'CF',
+            direccion: 'Ciudad',
+            telefono: '',
+          };
+      const idCliente = await obtenerORegistrarCliente(clienteParaCobro);
+      const idMedioPago = { efectivo: 1, tarjeta: 2, transferencia: 3 }[metodoPago];
+      const respuesta = await emitirFactura({
+        idCotizacion,
+        idCliente,
+        idUsuario: obtenerUsuarioActivo(),
+        numeroFactura,
+        totalFactura: total,
+        detalles: orden.map((item) => ({
+          idProducto: item.id,
+          cantidadVendida: item.cantidad,
+          precioVendido: item.precio,
+          subtotalVendido: item.precio * item.cantidad,
+        })),
+        pagos: [{ idMedioPago, montoPago: total, referenciaPago: referenciaPago || null }],
+      });
+      setOrden([]);
+      setIdCotizacion(undefined);
+      setModalCobro(false);
+      alert(`Factura ${respuesta.data.idFactura} emitida correctamente.`);
+      const factura = await obtenerFacturaParaImpresion(respuesta.data.idFactura);
+      const ventana = window.open('', '_blank');
+      if (ventana) {
+        const escaparHtml = (valor: unknown) =>
+          String(valor ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+        const texto = (objeto: Record<string, unknown>, campo: string) =>
+          escaparHtml(objeto[campo]);
+        const moneda = (valor: unknown) =>
+          Number(valor || 0).toLocaleString('es-GT', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        const datosFactura = factura.data.factura;
+        const detallesFactura = factura.data.detalles;
+        const pagosFactura = factura.data.pagos;
+        const fechaFactura = datosFactura.fechaFactura
+          ? new Date(String(datosFactura.fechaFactura)).toLocaleString('es-GT')
+          : 'No disponible';
+        const filasDetalle = detallesFactura
+          .map(
+            (detalle) => `
+              <tr>
+                <td>${texto(detalle, 'codigoProducto')}</td>
+                <td>${texto(detalle, 'nombreProducto')}</td>
+                <td class="center">${texto(detalle, 'cantidadVendida')}</td>
+                <td class="right">Q ${moneda(detalle.precioVendido)}</td>
+                <td class="right">Q ${moneda(detalle.subtotalVendido)}</td>
+              </tr>`,
+          )
+          .join('');
+        const filasPago = pagosFactura
+          .map(
+            (pago) => `
+              <tr>
+                <td>${texto(pago, 'nombreMedioPago')}</td>
+                <td>${texto(pago, 'referenciaPago') || '—'}</td>
+                <td class="right">Q ${moneda(pago.montoPago)}</td>
+              </tr>`,
+          )
+          .join('');
+        ventana.document.write(`
+          <html>
+            <head>
+              <title>Factura ${escaparHtml(datosFactura.numeroFactura || respuesta.data.idFactura)}</title>
+              <style>
+                @page { size: letter; margin: 14mm; }
+                * { box-sizing: border-box; }
+                body { margin: 0; color: #172033; font: 13px Arial, sans-serif; }
+                .factura { max-width: 760px; margin: 0 auto; }
+                .encabezado { display: flex; justify-content: space-between; border-bottom: 3px solid #1e3a8a; padding-bottom: 16px; }
+                h1 { color: #1e3a8a; font-size: 28px; margin: 0 0 5px; }
+                h2 { font-size: 18px; margin: 0; }
+                p { margin: 4px 0; }
+                .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 25px; margin: 20px 0; }
+                .etiqueta { color: #64748b; font-size: 11px; text-transform: uppercase; }
+                table { border-collapse: collapse; width: 100%; }
+                th { background: #1e3a8a; color: white; font-size: 11px; padding: 9px 7px; text-align: left; }
+                td { border-bottom: 1px solid #dbe2ea; padding: 9px 7px; }
+                .center { text-align: center; }
+                .right { text-align: right; }
+                .totales { margin: 18px 0 0 auto; max-width: 280px; }
+                .total { border-top: 2px solid #1e3a8a; font-size: 17px; font-weight: bold; }
+                .pagos { margin-top: 28px; }
+                .pie { border-top: 1px solid #dbe2ea; margin-top: 30px; padding-top: 15px; text-align: center; color: #64748b; }
+                @media print { .no-print { display: none; } }
+              </style>
+            </head>
+            <body>
+              <main class="factura">
+                <header class="encabezado">
+                  <div>
+                    <h1>PintaPro</h1>
+                    <p>Soluciones profesionales de pintura</p>
+                  </div>
+                  <div class="right">
+                    <h2>FACTURA</h2>
+                    <p><strong>No. ${escaparHtml(datosFactura.numeroFactura || respuesta.data.idFactura)}</strong></p>
+                    <p>${escaparHtml(fechaFactura)}</p>
+                  </div>
+                </header>
+                <section class="datos">
+                  <div><span class="etiqueta">Cliente</span><br>${texto(datosFactura, 'nombreCliente')}</div>
+                  <div><span class="etiqueta">NIT</span><br>${texto(datosFactura, 'nitCliente')}</div>
+                  <div><span class="etiqueta">Dirección</span><br>${texto(datosFactura, 'direccionCliente') || '—'}</div>
+                  <div><span class="etiqueta">Atendido por</span><br>${texto(datosFactura, 'nombreEmpleado')}</div>
+                </section>
+                <table>
+                  <thead><tr><th>Código</th><th>Producto</th><th class="center">Cantidad</th><th class="right">Precio</th><th class="right">Subtotal</th></tr></thead>
+                  <tbody>${filasDetalle}</tbody>
+                </table>
+                <section class="totales">
+                  <p class="total">Total: <span class="right">Q ${moneda(datosFactura.totalFactura)}</span></p>
+                </section>
+                <section class="pagos">
+                  <h2>Forma de pago</h2>
+                  <table>
+                    <thead><tr><th>Medio</th><th>Referencia</th><th class="right">Monto</th></tr></thead>
+                    <tbody>${filasPago}</tbody>
+                  </table>
+                </section>
+                <footer class="pie">Gracias por su compra.</footer>
+              </main>
+              <script>window.addEventListener('load', function () { window.print(); });</script>
+            </body>
+          </html>
+        `);
+        ventana.document.close();
+      }
+    } catch (error) {
+      setMensajeError(error instanceof Error ? error.message : 'No se pudo procesar la factura');
+    } finally {
+      setProcesando(false);
+    }
   };
 
   return (
@@ -244,7 +495,11 @@ export default function CajeroPage() {
 
           {/* Cuadrícula de Productos */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {productosFiltrados.length > 0 ? (
+            {cargandoProductos ? (
+              <div className="col-span-full py-12 text-center text-gray-400 bg-white rounded-2xl border">
+                Cargando productos...
+              </div>
+            ) : productosFiltrados.length > 0 ? (
               productosFiltrados.map((prod) => (
                 <div key={prod.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-200 flex flex-col justify-between hover:shadow-md transition">
                   <div>
@@ -542,11 +797,15 @@ export default function CajeroPage() {
                     </button>
                     <button 
                       type="submit" 
+                      disabled={procesando}
                       className="btn btn-sm bg-[#1e3a8a] hover:bg-blue-900 text-white font-bold border-none shadow px-5"
                     >
-                      💾 Finalizar Cotización
+                      {procesando ? 'Guardando...' : '💾 Finalizar Cotización'}
                     </button>
                   </div>
+                  {mensajeError && (
+                    <p className="text-xs font-semibold text-red-700" role="alert">{mensajeError}</p>
+                  )}
                 </form>
               </div>
             )}
@@ -600,14 +859,14 @@ export default function CajeroPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setMetodoPago('cheque')}
+                    onClick={() => setMetodoPago('transferencia')}
                     className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition ${
-                      metodoPago === 'cheque'
+                      metodoPago === 'transferencia'
                         ? 'bg-[#1e3a8a] text-white border-[#1e3a8a] shadow'
                         : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                     }`}
                   >
-                    📝 Cheque
+                    🏦 Transferencia
                   </button>
                 </div>
               </div>
@@ -640,13 +899,15 @@ export default function CajeroPage() {
                 </div>
               )}
 
-              {metodoPago === 'cheque' && (
+              {metodoPago === 'transferencia' && (
                 <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 space-y-2">
-                  <label className="text-xs font-bold text-gray-700 uppercase">No. de Cheque / Banco</label>
+                  <label className="text-xs font-bold text-gray-700 uppercase">Referencia / Banco</label>
                   <input 
                     type="text" 
                     required
-                    placeholder="Ej. Cheque #10402 - Banco Industrial"
+                    placeholder="Ej. TRANS-10402 - Banco Industrial"
+                    value={referenciaPago}
+                    onChange={(e) => setReferenciaPago(e.target.value)}
                     className="input input-bordered input-sm w-full bg-white text-gray-900"
                   />
                 </div>
@@ -654,6 +915,11 @@ export default function CajeroPage() {
 
               {/* Botones de Acción */}
               <div className="flex justify-end gap-2 pt-3 border-t">
+                {mensajeError && (
+                  <p className="mr-auto self-center text-xs font-semibold text-red-700" role="alert">
+                    {mensajeError}
+                  </p>
+                )}
                 <button 
                   type="button"
                   onClick={() => setModalCobro(false)} 
@@ -663,10 +929,10 @@ export default function CajeroPage() {
                 </button>
                 <button 
                   type="submit" 
-                  disabled={metodoPago === 'efectivo' && Number(montoPagado) < total}
+                  disabled={procesando || (metodoPago === 'efectivo' && Number(montoPagado) < total)}
                   className="btn btn-sm bg-green-600 hover:bg-green-700 text-white font-bold border-none shadow px-6 disabled:bg-gray-300"
                 >
-                  Confirmar Cobro
+                  {procesando ? 'Procesando...' : 'Confirmar Cobro'}
                 </button>
               </div>
             </form>

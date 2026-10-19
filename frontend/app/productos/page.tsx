@@ -167,6 +167,12 @@ export default function ProductosDashboard() {
             >
               + Agregar Producto
             </button>
+            <button
+              onClick={() => router.push('/compras')}
+              className="btn btn-sm bg-[#1e3a8a] hover:bg-blue-900 text-white border-none shadow"
+            >
+              Compras y bodega
+            </button>
           </div>
         </header>
 

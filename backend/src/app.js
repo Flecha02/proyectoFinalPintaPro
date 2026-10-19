@@ -19,6 +19,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'success', message: 'API PintaPro disponible' });
+});
+
 app.use('/api/usuarios', usuarioRoutes)
 app.use('/api/clientes', clienteRoutes)
 app.use('/api/productos', productoRoutes)

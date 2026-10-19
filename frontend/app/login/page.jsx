@@ -1,10 +1,32 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import Image from 'next/image';
+import { iniciarSesion } from '../../lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [correoUsuario, setCorreoUsuario] = useState('');
+  const [contraseniaUsuario, setContraseniaUsuario] = useState('');
+  const [mensajeError, setMensajeError] = useState('');
+  const [cargando, setCargando] = useState(false);
+
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setMensajeError('');
+    setCargando(true);
+
+    try {
+      const respuesta = await iniciarSesion(correoUsuario, contraseniaUsuario);
+      localStorage.setItem('usuario', JSON.stringify(respuesta.data));
+      router.push(respuesta.data.rol === 'CAJERO' ? '/cajero' : '/productos');
+    } catch (error) {
+      setMensajeError(error instanceof Error ? error.message : 'No fue posible iniciar sesión');
+    } finally {
+      setCargando(false);
+    }
+  };
 
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
@@ -49,17 +71,20 @@ export default function LoginPage() {
         </div>
 
         {/* Formulario */}
-        <form className="w-full space-y-4">
+        <form className="w-full space-y-4" onSubmit={handleLogin}>
           <div>
             <label className="block text-xs font-semibold text-gray-800 mb-1">
-              Ingrese su usuario:
+              Ingrese su correo:
             </label>
             <input 
-              type="text" 
-              placeholder="Usuario" 
+              type="email"
+              placeholder="Correo electrónico"
+              autoComplete="email"
+              required
+              value={correoUsuario}
+              onChange={(event) => setCorreoUsuario(event.target.value)}
               className="input input-bordered w-full rounded-xl bg-gray-50 focus:bg-white text-gray-800 placeholder:text-gray-400"
     />
-            /
           </div>
 
           <div>
@@ -67,17 +92,26 @@ export default function LoginPage() {
               Ingrese su contraseña:
             </label>
             <input 
-              type="password" 
-              placeholder="Contraseña" 
+              type="password"
+              placeholder="Contraseña"
+              autoComplete="current-password"
+              required
+              value={contraseniaUsuario}
+              onChange={(event) => setContraseniaUsuario(event.target.value)}
               className="input input-bordered w-full rounded-xl bg-gray-50 focus:bg-white text-gray-800 placeholder:text-gray-400"
             />
           </div>
 
+          {mensajeError && (
+            <p className="text-sm text-red-600" role="alert">{mensajeError}</p>
+          )}
+
           <button 
             type="submit" 
+            disabled={cargando}
             className="btn w-full bg-[#E07A00] hover:bg-[#c66c00] text-white border-none rounded-xl mt-4 font-normal"
           >
-            Ingresar al sistema
+            {cargando ? 'Conectando...' : 'Ingresar al sistema'}
           </button>
         </form>
       </div>
