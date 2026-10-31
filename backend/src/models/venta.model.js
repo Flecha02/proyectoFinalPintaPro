@@ -115,9 +115,7 @@ async function obtenerFacturaPorIdImpresion(idFactura) {
     `;
     const [facturas] = await pool.query(queryCabecera, [idFactura, idFactura]);
     if (facturas.length === 0) return null;
-
     const fact = facturas[0];
-
     const queryDetalles = `
         SELECT df.*, p.nombreProducto, p.codigoProducto, m.descripcionMedida
         FROM DetalleFactura df
@@ -126,7 +124,6 @@ async function obtenerFacturaPorIdImpresion(idFactura) {
         WHERE df.idFactura = ?
     `;
     const [detalles] = await pool.query(queryDetalles, [fact.idFactura]);
-
     const queryPagos = `
         SELECT pf.*, mp.nombreMedioPago
         FROM PagoFactura pf
@@ -134,17 +131,24 @@ async function obtenerFacturaPorIdImpresion(idFactura) {
         WHERE pf.idFactura = ?
     `;
     const [pagos] = await pool.query(queryPagos, [fact.idFactura]);
-
     return {
         factura: fact,
         detalles,
         pagos
     };
 }
+async function anularFactura(numeroFactura, idUsuario) {
+    // Usamos pool.query en lugar de db.query
+    await pool.query('CALL sp_AnularFactura(?, ?, @resultado, @mensaje);', [numeroFactura, idUsuario]);
+    const [rows] = await pool.query('SELECT @resultado AS resultado, @mensaje AS mensaje;');
+    return rows[0]; 
+}
+
 module.exports = {
     crearCotizacion,
     obtenerCotizaciones,
     obtenerCotizacionPorId,
     procesarFacturaFIFO,
-    obtenerFacturaPorIdImpresion
+    obtenerFacturaPorIdImpresion,
+    anularFactura
 };

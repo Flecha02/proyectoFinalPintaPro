@@ -3,7 +3,8 @@ const {
     obtenerCotizaciones,
     obtenerCotizacionPorId,
     procesarFacturaFIFO,
-    obtenerFacturaPorIdImpresion
+    obtenerFacturaPorIdImpresion,
+    anularFactura
 } = require('../models/venta.model');
 
 // COTIZACIONES
@@ -85,10 +86,48 @@ async function buscarFacturaImpresion(req, res) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 }
+const anularFacturaPorNumero = async (req, res) => {
+    try {
+        const { numeroFactura } = req.params;
+        const { idUsuario } = req.body;
+
+        if (!numeroFactura || !idUsuario) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Se requiere el numeroFactura en la ruta y el idUsuario en el body.'
+            });
+        }
+
+        // Llamamos directamente a la función anularFactura importada
+        const respuestaSP = await anularFactura(numeroFactura, idUsuario);
+
+        if (respuestaSP.resultado === 1) {
+            return res.status(200).json({
+                status: 'success',
+                message: respuestaSP.mensaje
+            });
+        } else {
+            return res.status(400).json({
+                status: 'error',
+                message: respuestaSP.mensaje
+            });
+        }
+
+    } catch (error) {
+        console.error('Error en controlador anularFactura:', error);
+        return res.status(500).json({
+            status: 'error',
+            message: 'Error interno del servidor al procesar la anulación.',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     registrarCotizacion,
     listarCotizaciones,
     buscarCotizacionPorId,
     emitirFactura,
-    buscarFacturaImpresion
+    buscarFacturaImpresion,
+    anularFacturaPorNumero
 };
