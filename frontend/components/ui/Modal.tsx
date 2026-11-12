@@ -9,6 +9,7 @@ export interface ModalProps {
   description?: string;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl';
+  closeOnClickOutside?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -18,6 +19,7 @@ export const Modal: React.FC<ModalProps> = ({
   description,
   children,
   maxWidth = 'lg',
+  closeOnClickOutside = false,
 }) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = React.useId();
@@ -44,7 +46,9 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   const handleClickBackdrop = (e: React.MouseEvent<HTMLDialogElement>) => {
-    // Si el clic ocurrió directamente en el backdrop del elemento <dialog>
+    // Si closeOnClickOutside es false, no cerrar por clics accidentales en el fondo o selects
+    if (!closeOnClickOutside) return;
+
     const dialog = dialogRef.current;
     if (!dialog) return;
     const rect = dialog.getBoundingClientRect();

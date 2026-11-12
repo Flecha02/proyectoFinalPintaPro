@@ -3,26 +3,40 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
+  retries = 2,
 ): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  let attempt = 0;
+  while (true) {
+    try {
+      const response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      });
 
-  const body = await response.json().catch(() => null);
+      const body = await response.json().catch(() => null);
 
-  if (!response.ok) {
-    const message =
-      body && typeof body.message === 'string'
-        ? body.message
-        : `La solicitud falló (${response.status})`;
-    throw new Error(message);
+      if (!response.ok) {
+        const message =
+          body && typeof body.message === 'string'
+            ? body.message
+            : `La solicitud falló (${response.status})`;
+        throw new Error(message);
+      }
+
+      return body as T;
+    } catch (error) {
+      attempt++;
+      // Reintentar sólo en peticiones GET y hasta el límite de reintentos
+      if (attempt > retries || (options.method && options.method !== 'GET')) {
+        throw error;
+      }
+      // Esperar 400ms antes de reintentar
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
   }
-
-  return body as T;
 }
 
 export interface LoginResponse {
