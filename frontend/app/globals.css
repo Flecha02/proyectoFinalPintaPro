@@ -14,41 +14,84 @@ body {
 
 @media print {
   @page {
-    margin: 6mm;
+    margin: 8mm;
     size: auto;
   }
 
-  body {
-    background: #ffffff !important;
-    color: #000000 !important;
-    margin: 0 !important;
-    padding: 0 !important;
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Ocultar elementos no imprimibles */
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Ocultar elementos no imprimibles de la interfaz */
   nav, header, footer, button, .no-print, dialog::backdrop, [data-no-print] {
     display: none !important;
   }
 
   /* Asegurar que la zona de impresión sea la única visible */
   body > * {
-    visibility: hidden;
+    visibility: hidden !important;
+  }
+
+  dialog[open] {
+    all: unset !important;
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  dialog[open] > div,
+  dialog[open] > div > div {
+    all: unset !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: visible !important;
   }
 
   .factura-print-zone,
   .factura-print-zone * {
-    visibility: visible;
+    visibility: visible !important;
   }
 
   .factura-print-zone {
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: static !important;
+    display: block !important;
     width: 100% !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     background: #ffffff !important;
     box-shadow: none !important;
-    border: none !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }

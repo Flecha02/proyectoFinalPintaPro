@@ -53,18 +53,139 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
 
   if (!factura) return null;
 
-  const handleImprimir = () => {
-    window.print();
-  };
+  // Normalización de datos: soporta respuesta anidada { factura: {...}, detalles: [...], pagos: [...] }
+  // y también estructura plana Factura
+  const cabecera = (factura as any)?.factura || factura;
+  const detalles: any[] =
+    (factura as any)?.detalles ||
+    (cabecera as any)?.detalles ||
+    (factura as any)?.detalle ||
+    [];
+  const pagos: any[] =
+    (factura as any)?.pagos ||
+    (cabecera as any)?.pagos ||
+    (factura as any)?.pago ||
+    [];
 
-  const fechaFormateada = new Date(factura.fechaFactura).toLocaleString('es-GT', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  const numeroFactura = cabecera?.numeroFactura || 'FAC-0000';
+  const fechaRaw = cabecera?.fechaFactura || new Date().toISOString();
+  const fechaFormateada = (() => {
+    try {
+      const d = new Date(fechaRaw);
+      return isNaN(d.getTime())
+        ? String(fechaRaw)
+        : d.toLocaleString('es-GT', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          });
+    } catch {
+      return String(fechaRaw);
+    }
+  })();
 
-  const totalNum = Number(factura.totalFactura) || 0;
+  const nombreCliente = cabecera?.nombreCliente || 'Consumidor Final';
+  const nitCliente = cabecera?.nitCliente || 'CF';
+  const direccionCliente = cabecera?.direccionCliente || 'Ciudad de Guatemala';
+  const nombreEmpleado = cabecera?.nombreEmpleado || cabecera?.nombreUsuario || 'Cajero en Turno';
+  const estadoFactura = cabecera?.estadoFactura || 'Emitida';
+
+  // Total numérico seguro (del encabezado o recalculado desde las líneas de detalle)
+  const totalDesdeCabecera = Number(cabecera?.totalFactura || 0);
+  const totalDesdeDetalles = detalles.reduce(
+    (acc: number, d: any) =>
+      acc +
+      (Number(d.subtotalVendido) ||
+        Number(d.cantidadVendida || 0) * Number(d.precioVendido || 0)),
+    0
+  );
+  const totalNum = totalDesdeCabecera > 0 ? totalDesdeCabecera : totalDesdeDetalles;
+
   const ivaCalculado = (totalNum * 0.12) / 1.12;
   const subtotalSinIva = totalNum - ivaCalculado;
+
+  const handleImprimir = () => {
+    const printContent = document.getElementById('factura-print-container');
+    if (!printContent) {
+      window.print();
+      return;
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    // Clonar todas las hojas de estilos compiladas de la aplicación para preservar diseño y fuentes
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((el) => el.outerHTML)
+      .join('\n');
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html lang="es">
+        <head>
+          <meta charset="utf-8" />
+          <title>Factura_${numeroFactura}</title>
+          ${styles}
+          <style>
+            @page {
+              margin: ${formato === 'TICKET' ? '4mm' : '8mm'};
+              size: ${formato === 'TICKET' ? '80mm auto' : 'letter portrait'};
+            }
+            *, *::before, *::after {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              box-sizing: border-box;
+            }
+            body {
+              background: #ffffff !important;
+              color: #0f172a !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              font-family: Arial, Helvetica, sans-serif;
+            }
+            .factura-print-zone {
+              width: 100% !important;
+              max-width: ${formato === 'TICKET' ? '340px' : '760px'} !important;
+              margin: 0 auto !important;
+              border: ${formato === 'CARTA' ? '1px solid #cbd5e1' : 'none'} !important;
+              border-radius: ${formato === 'CARTA' ? '12px' : '0'} !important;
+              background: #ffffff !important;
+              box-shadow: none !important;
+              padding: 0 !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="factura-print-zone">
+            ${printContent.innerHTML}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 1500);
+    }, 250);
+  };
 
   return (
     <Modal
@@ -110,7 +231,10 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
         </div>
 
         {/* CONTENEDOR PRINCIPAL IMPRIMIBLE */}
-        <div className="factura-print-zone bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div
+          id="factura-print-container"
+          className="factura-print-zone bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden"
+        >
           {formato === 'CARTA' ? (
             /* ========================================================= */
             /* FORMATO 1: FACTURA ESTÁNDAR / HOJA CARTA                  */
@@ -138,7 +262,7 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
                     Factura Electrónica (DTE)
                   </span>
                   <div className="font-mono text-sm font-black text-slate-900">
-                    {factura.numeroFactura}
+                    {numeroFactura}
                   </div>
                   <div className="text-[11px] text-slate-500">
                     Fecha: <strong className="text-slate-700">{fechaFormateada}</strong>
@@ -146,12 +270,12 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
                   <div className="pt-1">
                     <span
                       className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        factura.estadoFactura === 'Anulada'
+                        estadoFactura === 'Anulada'
                           ? 'bg-red-100 text-red-700'
                           : 'bg-emerald-100 text-emerald-800'
                       }`}
                     >
-                      {factura.estadoFactura === 'Anulada' ? 'ANULADA' : 'DOCUMENTO CERTIFICADO'}
+                      {estadoFactura === 'Anulada' ? 'ANULADA' : 'DOCUMENTO CERTIFICADO'}
                     </span>
                   </div>
                 </div>
@@ -164,16 +288,16 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
                     Datos del Cliente / Receptor
                   </span>
                   <p className="font-bold text-slate-900 text-sm">
-                    {factura.nombreCliente || 'Consumidor Final'}
+                    {nombreCliente}
                   </p>
                   <p className="text-slate-600">
                     NIT / DPI:{' '}
                     <span className="font-mono font-semibold text-slate-800">
-                      {factura.nitCliente || 'CF'}
+                      {nitCliente}
                     </span>
                   </p>
                   <p className="text-slate-500 text-[11px]">
-                    Dirección: {factura.direccionCliente || 'Ciudad de Guatemala'}
+                    Dirección: {direccionCliente}
                   </p>
                 </div>
 
@@ -182,7 +306,7 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
                     Información de la Operación
                   </span>
                   <p className="text-slate-700">
-                    Atendido por: <strong className="text-slate-900">{factura.nombreEmpleado || 'Cajero en Turno'}</strong>
+                    Atendido por: <strong className="text-slate-900">{nombreEmpleado}</strong>
                   </p>
                   <p className="text-slate-600">
                     Moneda: <strong className="text-slate-900">Quetzales (GTQ - Q)</strong>
@@ -207,33 +331,38 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {(factura.detalles || []).map((d, index) => (
-                      <tr key={index} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-2.5 px-2 text-center text-slate-400 font-mono text-[11px]">
-                          {index + 1}
-                        </td>
-                        <td className="py-2.5 px-2 font-mono text-[11px] text-slate-600">
-                          {d.codigoProducto || `PROD-${d.idProducto}`}
-                        </td>
-                        <td className="py-2.5 px-2">
-                          <span className="font-semibold text-slate-900 block">{d.nombreProducto}</span>
-                          {d.descripcionMedida && (
-                            <span className="text-[10px] text-slate-400 block">
-                              Presentación: {d.descripcionMedida}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-2 text-center font-bold text-slate-800">
-                          {d.cantidadVendida}
-                        </td>
-                        <td className="py-2.5 px-2 text-right text-slate-600 font-mono">
-                          Q {Number(d.precioVendido).toFixed(2)}
-                        </td>
-                        <td className="py-2.5 px-2 text-right font-black text-slate-900 font-mono">
-                          Q {Number(d.subtotalVendido).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
+                    {detalles.map((d: any, index: number) => {
+                      const pUnit = Number(d.precioVendido || 0);
+                      const cant = Number(d.cantidadVendida || 0);
+                      const subtotal = Number(d.subtotalVendido) || (pUnit * cant);
+                      return (
+                        <tr key={index} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-2.5 px-2 text-center text-slate-400 font-mono text-[11px]">
+                            {index + 1}
+                          </td>
+                          <td className="py-2.5 px-2 font-mono text-[11px] text-slate-600">
+                            {d.codigoProducto || `PROD-${d.idProducto}`}
+                          </td>
+                          <td className="py-2.5 px-2">
+                            <span className="font-semibold text-slate-900 block">{d.nombreProducto}</span>
+                            {d.descripcionMedida && (
+                              <span className="text-[10px] text-slate-400 block">
+                                Presentación: {d.descripcionMedida}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-2 text-center font-bold text-slate-800">
+                            {cant}
+                          </td>
+                          <td className="py-2.5 px-2 text-right text-slate-600 font-mono">
+                            Q {pUnit.toFixed(2)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-black text-slate-900 font-mono">
+                            Q {subtotal.toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -247,15 +376,19 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
                       Formas de Pago Aplicadas
                     </span>
                     <div className="space-y-1.5">
-                      {(factura.pagos || []).length > 0 ? (
-                        factura.pagos?.map((p, idx) => (
+                      {pagos.length > 0 ? (
+                        pagos.map((p: any, idx: number) => (
                           <div
                             key={idx}
                             className="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-100 text-[11px]"
                           >
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-slate-800">
-                                {p.idMedioPago === 1 ? '💵 Efectivo' : p.idMedioPago === 2 ? '💳 Tarjeta' : '🏦 Transferencia'}
+                                {p.idMedioPago === 1 || p.nombreMedioPago?.toLowerCase().includes('efectivo')
+                                  ? '💵 Efectivo'
+                                  : p.idMedioPago === 2 || p.nombreMedioPago?.toLowerCase().includes('tarjeta')
+                                  ? '💳 Tarjeta'
+                                  : '🏦 Transferencia'}
                               </span>
                               {p.referenciaPago && p.referenciaPago !== 'EFECTIVO' && (
                                 <span className="font-mono text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
@@ -264,7 +397,7 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
                               )}
                             </div>
                             <span className="font-mono font-bold text-slate-900">
-                              Q {Number(p.montoPago).toFixed(2)}
+                              Q {Number(p.montoPago || 0).toFixed(2)}
                             </span>
                           </div>
                         ))
@@ -342,17 +475,17 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
                 <p className="text-[10px] text-slate-500">NIT: 9876543-2 · PBX: 7761-0000</p>
                 <p className="text-[10px] text-slate-500">Quetzaltenango, Guatemala</p>
                 <div className="mt-2 py-1 bg-slate-100 rounded text-xs font-black">
-                  FACTURA No. {factura.numeroFactura}
+                  FACTURA No. {numeroFactura}
                 </div>
               </div>
 
               {/* Datos Venta */}
               <div className="space-y-0.5 text-[10px] pb-2 border-b border-dashed border-slate-300 text-slate-700">
                 <div><b>FECHA:</b> {fechaFormateada}</div>
-                <div><b>CLIENTE:</b> {factura.nombreCliente || 'Consumidor Final'}</div>
-                <div><b>NIT:</b> {factura.nitCliente || 'CF'}</div>
-                {factura.direccionCliente && <div><b>DIR:</b> {factura.direccionCliente}</div>}
-                <div><b>CAJERO:</b> {factura.nombreEmpleado || 'Caja 1'}</div>
+                <div><b>CLIENTE:</b> {nombreCliente}</div>
+                <div><b>NIT:</b> {nitCliente}</div>
+                {direccionCliente && <div><b>DIR:</b> {direccionCliente}</div>}
+                <div><b>CAJERO:</b> {nombreEmpleado}</div>
               </div>
 
               {/* Productos */}
@@ -361,19 +494,24 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
                   <span>Cant / Descripción</span>
                   <span>Subtotal</span>
                 </div>
-                {(factura.detalles || []).map((d, index) => (
-                  <div key={index} className="space-y-0.5">
-                    <div className="font-bold text-slate-900">
-                      {d.cantidadVendida}x {d.nombreProducto}
+                {detalles.map((d: any, index: number) => {
+                  const pUnit = Number(d.precioVendido || 0);
+                  const cant = Number(d.cantidadVendida || 0);
+                  const subtotal = Number(d.subtotalVendido) || (pUnit * cant);
+                  return (
+                    <div key={index} className="space-y-0.5">
+                      <div className="font-bold text-slate-900">
+                        {cant}x {d.nombreProducto}
+                      </div>
+                      <div className="flex justify-between text-[10px] text-slate-500">
+                        <span>P.U: Q {pUnit.toFixed(2)}</span>
+                        <span className="font-bold text-slate-900 font-mono">
+                          Q {subtotal.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-[10px] text-slate-500">
-                      <span>P.U: Q {Number(d.precioVendido).toFixed(2)}</span>
-                      <span className="font-bold text-slate-900 font-mono">
-                        Q {Number(d.subtotalVendido).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Total Térmico */}
@@ -393,20 +531,20 @@ export const TicketImpresion: React.FC<TicketImpresionProps> = ({
               </div>
 
               {/* Desglose de Pagos */}
-              {(factura.pagos || []).length > 0 && (
+              {pagos.length > 0 && (
                 <div className="space-y-1 pb-3 border-b border-dashed border-slate-300 text-[10px]">
                   <b className="block text-slate-500 uppercase">Formas de Pago:</b>
-                  {factura.pagos?.map((p, idx) => (
+                  {pagos.map((p: any, idx: number) => (
                     <div key={idx} className="flex justify-between items-center text-slate-700">
                       <span>
-                        {p.nombreMedioPago || 'Pago'}
+                        {p.nombreMedioPago || (p.idMedioPago === 1 ? 'Efectivo' : p.idMedioPago === 2 ? 'Tarjeta' : 'Transferencia')}
                         {p.referenciaPago && p.referenciaPago !== 'EFECTIVO' ? (
                           <span className="text-[9px] text-slate-400 block font-mono">
                             {p.referenciaPago}
                           </span>
                         ) : null}
                       </span>
-                      <span className="font-bold">Q {Number(p.montoPago).toFixed(2)}</span>
+                      <span className="font-bold">Q {Number(p.montoPago || 0).toFixed(2)}</span>
                     </div>
                   ))}
                 </div>

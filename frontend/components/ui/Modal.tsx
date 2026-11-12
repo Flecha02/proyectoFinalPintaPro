@@ -78,7 +78,7 @@ export const Modal: React.FC<ModalProps> = ({
       className={`fixed inset-0 m-auto p-0 bg-transparent backdrop:bg-black/50 backdrop:backdrop-blur-xs overscroll-contain rounded-3xl shadow-2xl w-[calc(100%-2rem)] ${maxWidthClasses[maxWidth]} transition-all`}
     >
       <div className="bg-white rounded-3xl border border-gray-100 p-6 sm:p-8 flex flex-col max-h-[90vh]">
-        <div className="flex items-start justify-between gap-4 pb-4 border-b border-gray-100">
+        <div className="no-print flex items-start justify-between gap-4 pb-4 border-b border-gray-100">
           <div>
             <h2 id={titleId} className="text-xl font-bold text-gray-900 tracking-tight">
               {title}
