@@ -107,7 +107,13 @@ async function eliminar(req, res) {
 
         res.json({ status: 'success', message: 'Producto eliminado correctamente' });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: error.message });
+        if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'No es posible eliminar el producto porque está vinculado a registros históricos del sistema (facturas, compras o inventario).'
+            });
+        }
+        res.status(400).json({ status: 'error', message: error.message });
     }
 }
 

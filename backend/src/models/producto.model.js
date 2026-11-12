@@ -60,6 +60,27 @@ async function actualizarProducto(idProducto, idCategoria, idMedidaPresentacion,
 }
 
 async function eliminarProducto(idProducto) {
+    // 1. Validar que no tenga facturas emitidas (integridad contable y fiscal)
+    const [facturas] = await pool.query('SELECT COUNT(*) AS c FROM DetalleFactura WHERE idProducto = ?', [idProducto]);
+    if (facturas[0].c > 0) {
+        throw new Error('No es posible eliminar el producto porque ya cuenta con facturas de venta emitidas en su historial contable.');
+    }
+
+    // 2. Validar que no tenga lotes de inventario o stock
+    const [lotes] = await pool.query('SELECT COUNT(*) AS c FROM LoteInventario WHERE idProducto = ?', [idProducto]);
+    if (lotes[0].c > 0) {
+        throw new Error('No es posible eliminar el producto porque tiene lotes o inventario registrado en bodega.');
+    }
+
+    // 3. Validar que no tenga órdenes de compra a proveedores
+    const [compras] = await pool.query('SELECT COUNT(*) AS c FROM DetalleOrdenCompra WHERE idProducto = ?', [idProducto]);
+    if (compras[0].c > 0) {
+        throw new Error('No es posible eliminar el producto porque está vinculado a órdenes de compra a proveedores.');
+    }
+
+    // 4. Si solo tiene cotizaciones temporales (presupuestos), limpiar esas líneas para permitir la eliminación
+    await pool.query('DELETE FROM DetalleCotizacion WHERE idProducto = ?', [idProducto]);
+
     const [result] = await pool.query('DELETE FROM Producto WHERE idProducto = ?', [idProducto]);
     return result.affectedRows;
 }

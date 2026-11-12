@@ -3,6 +3,7 @@ const {
     obtenerCotizaciones,
     obtenerCotizacionPorId,
     procesarFacturaFIFO,
+    obtenerFacturas,
     obtenerFacturaPorIdImpresion,
     anularFactura
 } = require('../models/venta.model');
@@ -50,8 +51,28 @@ async function emitirFactura(req, res) {
     try {
         const { idCotizacion, idCliente, idUsuario, numeroFactura, totalFactura, detalles, pagos } = req.body;
 
-        if (!idCliente || !idUsuario || !numeroFactura || !totalFactura || !detalles || !pagos || detalles.length === 0 || pagos.length === 0) {
+        if (!idCliente || !idUsuario || !numeroFactura || !totalFactura || !detalles || !pagos || detalles.length === 0 || !Array.isArray(pagos) || pagos.length === 0) {
             return res.status(400).json({ status: 'error', message: 'Faltan campos obligatorios para facturar.' });
+        }
+
+        // Validar cada método de pago y que la sumatoria cuadre con el total de la factura
+        let totalPagos = 0;
+        for (const p of pagos) {
+            const monto = Number(p.montoPago);
+            if (!p.idMedioPago || isNaN(monto) || monto <= 0) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'Cada método de pago debe tener un medio válido y un monto mayor a cero.'
+                });
+            }
+            totalPagos += monto;
+        }
+
+        if (Math.abs(totalPagos - Number(totalFactura)) > 0.05) {
+            return res.status(400).json({
+                status: 'error',
+                message: `El total de los pagos asignados (Q ${totalPagos.toFixed(2)}) no coincide con el total de la factura (Q ${Number(totalFactura).toFixed(2)}).`
+            });
         }
 
         const idFactura = await procesarFacturaFIFO(
@@ -121,11 +142,22 @@ async function anularFacturaPorNumero(req, res) {
     }
 }
 
+async function listarFacturas(req, res) {
+    try {
+        const { busqueda } = req.query;
+        const facturas = await obtenerFacturas(busqueda);
+        res.json({ status: 'success', data: facturas });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+}
+
 module.exports = {
     registrarCotizacion,
     listarCotizaciones,
     buscarCotizacionPorId,
     emitirFactura,
+    listarFacturas,
     buscarFacturaImpresion,
     anularFacturaPorNumero
 };

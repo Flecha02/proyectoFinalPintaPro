@@ -154,11 +154,40 @@ async function anularFactura(numeroFactura, idUsuario) {
     }
 }
 
+async function obtenerFacturas(criterio = '') {
+    let query = `
+        SELECT 
+            f.idFactura,
+            f.numeroFactura,
+            f.fechaFactura,
+            f.totalFactura,
+            f.estadoFactura,
+            f.idCliente,
+            cl.nombreCliente,
+            cl.nitCliente,
+            u.nombreUsuario AS nombreEmpleado,
+            (SELECT COUNT(*) FROM DetalleFactura df WHERE df.idFactura = f.idFactura) AS totalItems
+        FROM Factura f
+        INNER JOIN Cliente cl ON f.idCliente = cl.idCliente
+        INNER JOIN Usuario u ON f.idUsuario = u.idUsuario
+    `;
+    const params = [];
+    if (criterio && criterio.trim() !== '') {
+        query += ` WHERE f.numeroFactura LIKE ? OR cl.nombreCliente LIKE ? OR cl.nitCliente LIKE ?`;
+        const patron = `%${criterio.trim()}%`;
+        params.push(patron, patron, patron);
+    }
+    query += ` ORDER BY f.fechaFactura DESC`;
+    const [rows] = await pool.query(query, params);
+    return rows;
+}
+
 module.exports = {
     crearCotizacion,
     obtenerCotizaciones,
     obtenerCotizacionPorId,
     procesarFacturaFIFO,
+    obtenerFacturas,
     obtenerFacturaPorIdImpresion,
     anularFactura
 };

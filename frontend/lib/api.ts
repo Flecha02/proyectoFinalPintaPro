@@ -84,12 +84,33 @@ export function buscarClientes(busqueda: string) {
 export function registrarCliente(cliente: {
   nitCliente: string;
   nombreCliente: string;
-  telefonoCliente: string;
-  direccionCliente: string;
+  telefonoCliente?: string | null;
+  direccionCliente?: string | null;
 }) {
   return apiRequest<ApiResponse<{ idCliente: number }>>('/clientes', {
     method: 'POST',
     body: JSON.stringify(cliente),
+  });
+}
+
+export function actualizarCliente(
+  idCliente: number,
+  cliente: {
+    nitCliente: string;
+    nombreCliente: string;
+    telefonoCliente?: string | null;
+    direccionCliente?: string | null;
+  },
+) {
+  return apiRequest<ApiResponse<null>>(`/clientes/${idCliente}`, {
+    method: 'PUT',
+    body: JSON.stringify(cliente),
+  });
+}
+
+export function eliminarCliente(idCliente: number) {
+  return apiRequest<ApiResponse<null>>(`/clientes/${idCliente}`, {
+    method: 'DELETE',
   });
 }
 
@@ -140,7 +161,7 @@ export interface FacturaImpresion {
   pagos: Array<Record<string, unknown>>;
 }
 
-export function obtenerFacturaParaImpresion(idFactura: number) {
+export function obtenerFacturaParaImpresion(idFactura: number | string) {
   return apiRequest<ApiResponse<FacturaImpresion>>(`/ventas/facturas/${idFactura}/impresion`);
 }
 
@@ -155,9 +176,14 @@ export interface ProveedorApi {
 export interface OrdenCompraApi {
   idOrdenCompra: number;
   idProveedor: number;
+  nitProveedor?: string;
+  idUsuario?: number;
+  nombreUsuario?: string;
   estadoOrdenCompra: string;
   fechaOrdenCompra: string;
   nombreProveedor: string;
+  totalSolicitado?: number;
+  totalRecibido?: number;
   detalles?: DetalleOrdenCompraApi[];
 }
 
@@ -169,6 +195,8 @@ export interface DetalleOrdenCompraApi {
   nombreProducto: string;
   codigoProducto: string;
   descripcionMedida: string;
+  cantidadYaRecibida?: number;
+  cantidadPendiente?: number;
 }
 
 export interface UbicacionApi {
@@ -219,7 +247,7 @@ export function obtenerOrdenCompra(idOrdenCompra: number) {
 export function registrarIngresoBodega(ingreso: {
   idOrdenCompra: number;
   idUsuario: number;
-  numeroDocumentoEntrega: string;
+  numeroDocumentoEntrega?: string;
   lotesIngreso: Array<{
     idProducto: number;
     idUbicacionBodega: number;
@@ -324,6 +352,24 @@ export function listarCotizaciones() {
 
 export function obtenerCotizacion(idCotizacion: number) {
   return apiRequest<ApiResponse<CotizacionApi>>(`/ventas/cotizaciones/${idCotizacion}`);
+}
+
+export interface FacturaResumenApi {
+  idFactura: number;
+  numeroFactura: string;
+  fechaFactura: string;
+  totalFactura: number | string;
+  estadoFactura: string;
+  idCliente: number;
+  nombreCliente: string;
+  nitCliente: string;
+  nombreEmpleado: string;
+  totalItems: number;
+}
+
+export function listarFacturas(busqueda = '') {
+  const query = busqueda ? `?busqueda=${encodeURIComponent(busqueda)}` : '';
+  return apiRequest<ApiResponse<FacturaResumenApi[]>>(`/ventas/facturas${query}`);
 }
 
 export function anularFacturaPorNumero(numeroFactura: string, idUsuario: number) {

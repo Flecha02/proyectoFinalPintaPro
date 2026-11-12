@@ -102,7 +102,13 @@ async function eliminar(req, res) {
         }
         res.json({ status: 'success', message: 'Proveedor eliminado correctamente' });
     } catch (error) {
-        res.status(500).json({ status: 'error', message: error.message });
+        if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'No es posible eliminar este proveedor porque ya cuenta con órdenes de compra o historial de suministros asociados.'
+            });
+        }
+        res.status(400).json({ status: 'error', message: error.message });
     }
 }
 module.exports = {
