@@ -1,4 +1,4 @@
-name: CI/CD Pipeline PintaPro
+name: Pipeline CI/CD PintaPro
 
 on:
   push:
@@ -12,53 +12,53 @@ on:
 
 jobs:
   validate:
-    name: 🔍 Validate & Lint Code
+    name: Validar y Analizar Codigo
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Clonar repositorio
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Validate Backend Syntax
+      - name: Validar sintaxis del backend
         run: |
           echo "Verificando sintaxis del backend..."
           node --check backend/index.js
           node --check backend/src/app.js
-          echo "✅ Backend syntax OK"
+          echo "Sintaxis del backend correcta"
 
-      - name: Install & Validate Frontend TypeScript
+      - name: Instalar dependencias y validar TypeScript en frontend
         run: |
-          echo "Verificando frontend TypeScript..."
+          echo "Verificando TypeScript del frontend..."
           cd frontend
           npm ci
           npx tsc --noEmit
-          echo "✅ Frontend TypeScript OK"
+          echo "Validacion de TypeScript correcta"
 
   build-and-push:
-    name: 🐳 Build & Push Docker Images
+    name: Construir y Publicar Imagenes Docker
     needs: validate
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
-      - name: Checkout repository
+      - name: Clonar repositorio
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
+      - name: Iniciar sesion en Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Backend Image
+      - name: Construir y publicar imagen del Backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -68,7 +68,7 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/pintapro-backend:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/pintapro-backend:${{ github.sha }}
 
-      - name: Build and Push Frontend Image
+      - name: Construir y publicar imagen del Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -81,29 +81,29 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/pintapro-frontend:${{ github.sha }}
 
   deploy:
-    name: 🚀 Auto-Deploy to Dokploy
+    name: Despliegue Automatico en Dokploy
     needs: build-and-push
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
-      - name: Trigger Dokploy Backend Webhook
+      - name: Ejecutar Webhook de despliegue del Backend
         run: |
           echo "Desplegando Backend en Dokploy..."
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.DOKPLOY_BACKEND_WEBHOOK }}")
           if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 204 ]; then
-            echo "✅ Backend deployment triggered successfully (HTTP $STATUS)"
+            echo "Despliegue del Backend ejecutado correctamente (HTTP $STATUS)"
           else
-            echo "❌ Failed to trigger backend deployment (HTTP $STATUS)"
+            echo "Error al ejecutar despliegue del Backend (HTTP $STATUS)"
             exit 1
           fi
 
-      - name: Trigger Dokploy Frontend Webhook
+      - name: Ejecutar Webhook de despliegue del Frontend
         run: |
           echo "Desplegando Frontend en Dokploy..."
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.DOKPLOY_FRONTEND_WEBHOOK }}")
           if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 204 ]; then
-            echo "✅ Frontend deployment triggered successfully (HTTP $STATUS)"
+            echo "Despliegue del Frontend ejecutado correctamente (HTTP $STATUS)"
           else
-            echo "❌ Failed to trigger frontend deployment (HTTP $STATUS)"
+            echo "Error al ejecutar despliegue del Frontend (HTTP $STATUS)"
             exit 1
           fi

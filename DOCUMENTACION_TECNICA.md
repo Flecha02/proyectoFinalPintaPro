@@ -93,18 +93,18 @@ El archivo de automatización [`.github/workflows/deploy.yml`](.github/workflows
 [ Push / PR a main o dev-shoniro ]
                │
                ▼
-   [ 🔍 1. Validate & Lint Code ]
+   [ 1. Validar y Analizar Codigo ]
       ├── Sintaxis Backend (node --check)
-      └── Validación TypeScript Frontend (npx tsc --noEmit)
+      └── Validacion TypeScript Frontend (npx tsc --noEmit)
                │
                ▼
-   [ 🐳 2. Build & Push Docker Images ]
-      ├── Autenticación segura en Docker Hub
-      ├── Construcción con Buildx (amd64)
+   [ 2. Construir y Publicar Imagenes Docker ]
+      ├── Autenticacion segura en Docker Hub
+      ├── Construccion con Buildx (amd64)
       └── Push de shoniro93/pintapro-backend y shoniro93/pintapro-frontend (latest + SHA)
                │
                ▼
-   [ 🚀 3. Auto-Deploy to Dokploy ]
+   [ 3. Despliegue Automatico en Dokploy ]
       ├── POST Webhook Backend: http://163.192.145.126:3000/api/deploy/...
       └── POST Webhook Frontend: http://163.192.145.126:3000/api/deploy/...
 ```
