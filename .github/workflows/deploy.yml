@@ -1,0 +1,109 @@
+name: CI/CD Pipeline PintaPro
+
+on:
+  push:
+    branches:
+      - main
+      - dev-shoniro
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: 🔍 Validate & Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Validate Backend Syntax
+        run: |
+          echo "Verificando sintaxis del backend..."
+          node --check backend/index.js
+          node --check backend/src/app.js
+          echo "✅ Backend syntax OK"
+
+      - name: Install & Validate Frontend TypeScript
+        run: |
+          echo "Verificando frontend TypeScript..."
+          cd frontend
+          npm ci
+          npx tsc --noEmit
+          echo "✅ Frontend TypeScript OK"
+
+  build-and-push:
+    name: 🐳 Build & Push Docker Images
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/pintapro-backend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/pintapro-backend:${{ github.sha }}
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://api.163.192.145.126.nip.io/api
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/pintapro-frontend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/pintapro-frontend:${{ github.sha }}
+
+  deploy:
+    name: 🚀 Auto-Deploy to Dokploy
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Trigger Dokploy Backend Webhook
+        run: |
+          echo "Desplegando Backend en Dokploy..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.DOKPLOY_BACKEND_WEBHOOK }}")
+          if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 204 ]; then
+            echo "✅ Backend deployment triggered successfully (HTTP $STATUS)"
+          else
+            echo "❌ Failed to trigger backend deployment (HTTP $STATUS)"
+            exit 1
+          fi
+
+      - name: Trigger Dokploy Frontend Webhook
+        run: |
+          echo "Desplegando Frontend en Dokploy..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.DOKPLOY_FRONTEND_WEBHOOK }}")
+          if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 204 ]; then
+            echo "✅ Frontend deployment triggered successfully (HTTP $STATUS)"
+          else
+            echo "❌ Failed to trigger frontend deployment (HTTP $STATUS)"
+            exit 1
+          fi
