@@ -96,6 +96,24 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       return;
     }
 
+    const soloLetrasRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/;
+
+    if (!marca.trim()) {
+      setError('Debes ingresar la marca del producto.');
+      return;
+    }
+    if (!soloLetrasRegex.test(marca.trim())) {
+      setError('La marca solo puede contener letras y espacios.');
+      return;
+    }
+
+    if (!esAccesorio && !esBarnizOSolvente && color.trim() && color.trim() !== 'N/A') {
+      if (!soloLetrasRegex.test(color.trim())) {
+        setError('El color solo puede contener letras y espacios.');
+        return;
+      }
+    }
+
     setCargando(true);
     setError('');
     try {
@@ -167,7 +185,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             required
             placeholder="ej. PintaPro, Truper, Celco"
             value={marca}
-            onChange={(e) => setMarca(e.target.value)}
+            onChange={(e) => setMarca(e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, ''))}
+            helperText="Solo se permiten letras y espacios"
           />
 
           <Input
@@ -175,8 +194,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             disabled={esAccesorio || esBarnizOSolvente}
             placeholder={esAccesorio || esBarnizOSolvente ? 'No aplica' : 'ej. Blanco, Rojo Óxido'}
             value={esAccesorio || esBarnizOSolvente ? 'N/A' : color}
-            onChange={(e) => setColor(e.target.value)}
-            helperText={esAccesorio || esBarnizOSolvente ? 'Fijado en N/A para esta categoría' : undefined}
+            onChange={(e) => setColor(e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, ''))}
+            helperText={esAccesorio || esBarnizOSolvente ? 'Fijado en N/A para esta categoría' : 'Solo se permiten letras y espacios'}
           />
         </div>
 
