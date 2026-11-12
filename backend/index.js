@@ -7,12 +7,11 @@ async function iniciarAplicacion() {
     try {
         const connection = await pool.getConnection();
         connection.release();
-        
         console.log("Conexion a la base de datos establecida");
-        app.listen(PUERTO, () => console.log("AHORA ESTAMOS EN PINTAPRO EN EL PUERTO: " + PUERTO));
     } catch (e) {
-        console.error("Hay un error: " + e);
+        console.error("Aviso: Base de datos no conectada de inmediato (" + (e.message || e) + "). El servidor continuara en ejecucion.");
     }
+    app.listen(PUERTO, () => console.log("AHORA ESTAMOS EN PINTAPRO EN EL PUERTO: " + PUERTO));
 }
 
 iniciarAplicacion();
