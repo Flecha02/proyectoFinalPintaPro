@@ -614,7 +614,7 @@ CREATE OR REPLACE VIEW `AuditoriaOperacion` AS SELECT * FROM `auditoriaoperacion
 DELIMITER ;;
 
 DROP PROCEDURE IF EXISTS `sp_ProcesarFacturaFIFO` ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_ProcesarFacturaFIFO`(
+CREATE PROCEDURE `sp_ProcesarFacturaFIFO`(
     IN p_idCotizacion INT,
     IN p_idCliente INT,
     IN p_idUsuario INT,
@@ -833,7 +833,7 @@ BEGIN
 END ;;
 
 DROP PROCEDURE IF EXISTS `sp_ValidarLogin` ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_ValidarLogin`(IN p_correo VARCHAR(100), IN p_contrasenia VARCHAR(255))
+CREATE PROCEDURE `sp_ValidarLogin`(IN p_correo VARCHAR(100), IN p_contrasenia VARCHAR(255))
 SELECT u.idUsuario, u.nombreUsuario, u.correoUsuario, u.estadoUsuario, r.nombreRol
 FROM usuario u
 INNER JOIN rol r ON u.idRol = r.idRol
@@ -842,7 +842,7 @@ WHERE u.correoUsuario = p_correo
   AND u.contraseniaUsuario = SHA2(p_contrasenia, 256) ;;
 
 DROP PROCEDURE IF EXISTS `sp_AnularFactura` ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_AnularFactura`(
+CREATE PROCEDURE `sp_AnularFactura`(
     IN p_numeroFactura VARCHAR(50),
     IN p_idUsuario INT,
     OUT p_resultado INT,
