@@ -237,3 +237,176 @@ export function registrarIngresoBodega(ingreso: {
 export function listarUbicacionesBodega() {
   return apiRequest<ApiResponse<UbicacionApi[]>>('/catalogos/ubicaciones-bodega');
 }
+
+export interface CategoriaApi {
+  idCategoria: number;
+  nombreCategoria: string;
+  descripcionCategoria?: string;
+}
+
+export interface MedidaApi {
+  idMedidaPresentacion: number;
+  descripcionMedida: string;
+}
+
+export function listarCategorias() {
+  return apiRequest<ApiResponse<CategoriaApi[]>>('/catalogos/categorias');
+}
+
+export function listarMedidas() {
+  return apiRequest<ApiResponse<MedidaApi[]>>('/catalogos/medidas');
+}
+
+export function crearProducto(producto: {
+  idCategoria: number;
+  idMedidaPresentacion: number;
+  codigoProducto: string;
+  nombreProducto: string;
+  marcaProducto: string;
+  colorProducto?: string | null;
+  precioVentaProducto: number;
+}) {
+  return apiRequest<ApiResponse<{ idProducto: number }>>('/productos', {
+    method: 'POST',
+    body: JSON.stringify(producto),
+  });
+}
+
+export function actualizarProducto(
+  idProducto: number,
+  producto: {
+    idCategoria: number;
+    idMedidaPresentacion: number;
+    codigoProducto: string;
+    nombreProducto: string;
+    marcaProducto: string;
+    colorProducto?: string | null;
+    precioVentaProducto: number;
+  },
+) {
+  return apiRequest<ApiResponse<void>>(`/productos/${idProducto}`, {
+    method: 'PUT',
+    body: JSON.stringify(producto),
+  });
+}
+
+export function eliminarProducto(idProducto: number) {
+  return apiRequest<ApiResponse<void>>(`/productos/${idProducto}`, {
+    method: 'DELETE',
+  });
+}
+
+export interface CotizacionApi {
+  idCotizacion: number;
+  idCliente: number;
+  idUsuario: number;
+  totalCotizacion: number | string;
+  estadoCotizacion: string;
+  fechaCotizacion: string;
+  nombreCliente: string;
+  nitCliente: string;
+  nombreUsuario: string;
+  detalles?: Array<{
+    idDetalleCotizacion: number;
+    idProducto: number;
+    cantidadCotizada: number;
+    precioCotizado: number | string;
+    subtotalCotizado: number | string;
+    nombreProducto: string;
+    codigoProducto: string;
+    descripcionMedida: string;
+  }>;
+}
+
+export function listarCotizaciones() {
+  return apiRequest<ApiResponse<CotizacionApi[]>>('/ventas/cotizaciones');
+}
+
+export function obtenerCotizacion(idCotizacion: number) {
+  return apiRequest<ApiResponse<CotizacionApi>>(`/ventas/cotizaciones/${idCotizacion}`);
+}
+
+export function anularFacturaPorNumero(numeroFactura: string, idUsuario: number) {
+  return apiRequest<ApiResponse<void>>(`/ventas/facturas/anular/${encodeURIComponent(numeroFactura)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ idUsuario }),
+  });
+}
+
+// --- REPORTES ---
+
+export interface DesgloseMedioPago {
+  nombreMedioPago: string;
+  totalMonto: string | number;
+}
+
+export interface ReporteVentasMedioPagoApi {
+  totalGeneral: number;
+  desglose: DesgloseMedioPago[];
+}
+
+export interface ReporteProductoIngresoApi {
+  nombreProducto: string;
+  totalGenerado: string | number;
+}
+
+export interface ReporteProductoVendidoApi {
+  nombreProducto: string;
+  descripcionMedida: string;
+  cantidadTotalVendida: string | number;
+}
+
+export interface ReporteInventarioApi {
+  codigoProducto: string;
+  nombreProducto: string;
+  marcaProducto: string;
+  descripcionMedida: string;
+  estanteUbicacion: string;
+  pasilloUbicacion: string;
+  stockActual: number;
+  stockMinimo: number;
+}
+
+export interface ReporteProductoMenosVendidoApi {
+  nombreProducto: string;
+  totalVendido: string | number;
+}
+
+export interface ReporteProductoAgotadoApi {
+  codigoProducto: string;
+  nombreProducto: string;
+  marcaProducto: string;
+  stockTotalActual: number;
+  stockMinimo: number;
+}
+
+export function obtenerReporteVentasPorMedioPago(fechaInicio: string, fechaFin: string) {
+  return apiRequest<ApiResponse<ReporteVentasMedioPagoApi>>(
+    `/reportes/ventas-medio-pago?fechaInicio=${encodeURIComponent(fechaInicio)}&fechaFin=${encodeURIComponent(fechaFin)}`,
+  );
+}
+
+export function obtenerReporteProductosMasIngresos(fechaInicio: string, fechaFin: string) {
+  return apiRequest<ApiResponse<ReporteProductoIngresoApi[]>>(
+    `/reportes/productos-mas-ingresos?fechaInicio=${encodeURIComponent(fechaInicio)}&fechaFin=${encodeURIComponent(fechaFin)}`,
+  );
+}
+
+export function obtenerReporteProductosMasVendidos(fechaInicio: string, fechaFin: string) {
+  return apiRequest<ApiResponse<ReporteProductoVendidoApi[]>>(
+    `/reportes/productos-mas-vendidos?fechaInicio=${encodeURIComponent(fechaInicio)}&fechaFin=${encodeURIComponent(fechaFin)}`,
+  );
+}
+
+export function obtenerReporteInventarioActual() {
+  return apiRequest<ApiResponse<ReporteInventarioApi[]>>('/reportes/inventario-actual');
+}
+
+export function obtenerReporteProductosMenosVendidos() {
+  return apiRequest<ApiResponse<ReporteProductoMenosVendidoApi[]>>('/reportes/productos-menos-vendidos');
+}
+
+export function obtenerReporteProductosAgotados() {
+  return apiRequest<ApiResponse<ReporteProductoAgotadoApi[]>>('/reportes/productos-agotados');
+}
+

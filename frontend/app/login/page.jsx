@@ -20,7 +20,14 @@ export default function LoginPage() {
     try {
       const respuesta = await iniciarSesion(correoUsuario, contraseniaUsuario);
       localStorage.setItem('usuario', JSON.stringify(respuesta.data));
-      router.push(respuesta.data.rol === 'CAJERO' ? '/cajero' : '/productos');
+      const rol = respuesta.data.rol?.toUpperCase();
+      if (rol === 'CAJERO') {
+        router.push('/cajero');
+      } else if (rol === 'GERENTE' || rol === 'ADMIN' || rol === 'ADMINISTRADOR') {
+        router.push('/admin');
+      } else {
+        router.push('/productos');
+      }
     } catch (error) {
       setMensajeError(error instanceof Error ? error.message : 'No fue posible iniciar sesión');
     } finally {

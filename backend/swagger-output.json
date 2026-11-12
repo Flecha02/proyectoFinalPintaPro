@@ -810,6 +810,44 @@
         }
       }
     },
+    "/api/ventas/facturas/anular/{numeroFactura}": {
+      "put": {
+        "description": "Anular una factura por número",
+        "parameters": [
+          {
+            "name": "numeroFactura",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "idUsuario": {
+                  "type": "number",
+                  "example": 1
+                }
+              },
+              "required": ["idUsuario"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/api/reportes/ventas-medio-pago": {
       "get": {
         "description": "",

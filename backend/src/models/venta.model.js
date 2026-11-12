@@ -143,10 +143,22 @@ async function obtenerFacturaPorIdImpresion(idFactura) {
         pagos
     };
 }
+async function anularFactura(numeroFactura, idUsuario) {
+    const connection = await pool.getConnection();
+    try {
+        await connection.query('CALL sp_AnularFactura(?, ?, @resultado, @mensaje);', [numeroFactura, idUsuario]);
+        const [rows] = await connection.query('SELECT @resultado AS resultado, @mensaje AS mensaje;');
+        return rows[0];
+    } finally {
+        connection.release();
+    }
+}
+
 module.exports = {
     crearCotizacion,
     obtenerCotizaciones,
     obtenerCotizacionPorId,
     procesarFacturaFIFO,
-    obtenerFacturaPorIdImpresion
+    obtenerFacturaPorIdImpresion,
+    anularFactura
 };

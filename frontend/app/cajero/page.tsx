@@ -1,8 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import {
+  anularFacturaPorNumero,
+  buscarClientes,
+  emitirFactura,
+  listarCotizaciones,
+  listarProductos,
+  registrarCliente,
+  registrarCotizacion,
+} from '../../lib/api';
 
 interface Producto {
   id: number;
@@ -39,9 +48,21 @@ interface Factura {
 export default function CajeroPage() {
   const router = useRouter();
 
-  const [nombreCajero] = useState('María Ponciano');
+  const [nombreCajero] = useState(() => {
+    if (typeof window === 'undefined') return 'Cajero';
+    try {
+      const u = localStorage.getItem('usuario');
+      if (u) {
+        const parsed = JSON.parse(u);
+        return parsed?.nombreUsuario || 'Cajero';
+      }
+    } catch {
+      // Ignorar
+    }
+    return 'Cajero';
+  });
 
-  const [productos] = useState<Producto[]>([
+  const [productos, setProductos] = useState<Producto[]>([
     { id: 1, codigo: 'P001', nombre: 'Pintura Acrílica Vinil', categoria: 'Vinil', marca: 'PintaPro', color: 'Azul Rey', presentacion: 'Galón', precio: 125.00 },
     { id: 2, codigo: 'P002', nombre: 'Barniz Marina', categoria: 'Barniz', marca: 'LacaPlus', color: 'N/A', presentacion: 'Litro', precio: 85.50 },
     { id: 3, codigo: 'P003', nombre: 'Brocha Profesional 3"', categoria: 'Accesorios', marca: 'ProBrush', color: 'N/A', presentacion: 'N/A', precio: 25.00 },
@@ -64,6 +85,67 @@ export default function CajeroPage() {
     { id: 'FAC-1001', cliente: 'María López', total: 500.00, fecha: '2026-10-15', estado: 'Emitida' },
   ]);
 
+  // Cargar productos y cotizaciones reales al iniciar
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarDatosIniciales() {
+      try {
+        const respProd = await listarProductos();
+        if (activo && respProd?.data && respProd.data.length > 0) {
+          setProductos(
+            respProd.data.map((p) => ({
+              id: p.idProducto,
+              codigo: p.codigoProducto,
+              nombre: p.nombreProducto,
+              categoria: p.nombreCategoria || 'General',
+              marca: p.marcaProducto || 'PintaPro',
+              color: p.colorProducto || 'N/A',
+              presentacion: p.descripcionMedida || 'Unidad',
+              precio: Number(p.precioVentaProducto || 0),
+            }))
+          );
+        }
+      } catch {
+        // Ignorar si la API aún no está disponible y mantener mock
+      }
+
+      try {
+        const respCot = await listarCotizaciones();
+        if (activo && respCot?.data && respCot.data.length > 0) {
+          setCotizacionesGuardadas(
+            respCot.data.map((c) => ({
+              id: `COT-${String(c.idCotizacion).padStart(3, '0')}`,
+              cliente: c.nombreCliente || 'Cliente',
+              nit: c.nitCliente || 'CF',
+              fecha: String(c.fechaCotizacion || '').slice(0, 10),
+              total: Number(c.totalCotizacion || 0),
+              items: (c.detalles || []).map((d) => ({
+                id: d.idProducto,
+                codigo: d.codigoProducto,
+                nombre: d.nombreProducto,
+                categoria: 'General',
+                marca: 'PintaPro',
+                color: 'N/A',
+                presentacion: d.descripcionMedida || 'Unidad',
+                precio: Number(d.precioCotizado || 0),
+                cantidad: d.cantidadCotizada,
+              })),
+            }))
+          );
+        }
+      } catch {
+        // Ignorar si la API no está disponible
+      }
+    }
+
+    cargarDatosIniciales();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
+
   const [vistaActual, setVistaActual] = useState<'pos' | 'cotizaciones' | 'anular'>('pos');
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todos');
   const [busqueda, setBusqueda] = useState('');
@@ -73,7 +155,14 @@ export default function CajeroPage() {
   const [pasoConfirmacion, setPasoConfirmacion] = useState(false);
   const [nitBusqueda, setNitBusqueda] = useState('');
   const [clienteEncontrado, setClienteEncontrado] = useState(false);
-  const [datosCliente, setDatosCliente] = useState({
+  const [datosCliente, setDatosCliente] = useState<{
+    idCliente?: number;
+    nombre: string;
+    apellido: string;
+    nit: string;
+    direccion: string;
+    telefono: string;
+  }>({
     nombre: '',
     apellido: '',
     nit: '',
@@ -93,6 +182,7 @@ export default function CajeroPage() {
 
   const handleCerrarSesion = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('usuario');
     router.push('/login');
   };
 
@@ -145,10 +235,39 @@ export default function CajeroPage() {
     return coincideCategoria && coincideBusqueda;
   });
 
-  const buscarClientePorNit = () => {
-    const encontrado = clientesRegistrados.find((c) => c.nit.trim().toLowerCase() === nitBusqueda.trim().toLowerCase());
+  const buscarClientePorNit = async () => {
+    const nit = nitBusqueda.trim();
+    if (!nit) return;
+
+    try {
+      const resp = await buscarClientes(nit);
+      if (resp?.data && resp.data.length > 0) {
+        const cli = resp.data.find((c) => c.nitCliente.toLowerCase() === nit.toLowerCase()) || resp.data[0];
+        const partesNombre = cli.nombreCliente.split(' ');
+        const nombre = partesNombre[0] || cli.nombreCliente;
+        const apellido = partesNombre.slice(1).join(' ') || '';
+
+        setDatosCliente({
+          idCliente: cli.idCliente,
+          nombre,
+          apellido,
+          nit: cli.nitCliente,
+          direccion: cli.direccionCliente || 'Ciudad',
+          telefono: cli.telefonoCliente || 'N/A',
+        });
+        setClienteEncontrado(true);
+        return;
+      }
+    } catch {
+      // Ignorar fallo de red
+    }
+
+    const encontrado = clientesRegistrados.find(
+      (c) => c.nit.trim().toLowerCase() === nit.toLowerCase()
+    );
     if (encontrado) {
       setDatosCliente({
+        idCliente: undefined,
         nombre: encontrado.nombre,
         apellido: encontrado.apellido,
         nit: encontrado.nit,
@@ -158,19 +277,79 @@ export default function CajeroPage() {
       setClienteEncontrado(true);
     } else {
       alert('Cliente no encontrado. Ingrese los datos para registrarlo.');
-      setDatosCliente({ nombre: '', apellido: '', nit: nitBusqueda, direccion: '', telefono: '' });
+      setDatosCliente({ idCliente: undefined, nombre: '', apellido: '', nit, direccion: '', telefono: '' });
       setClienteEncontrado(false);
     }
   };
 
   const prepararNuevoCliente = () => {
     setNitBusqueda('');
-    setDatosCliente({ nombre: '', apellido: '', nit: '', direccion: '', telefono: '' });
+    setDatosCliente({ idCliente: undefined, nombre: '', apellido: '', nit: '', direccion: '', telefono: '' });
     setClienteEncontrado(false);
   };
 
-  const handleGuardarCotizacionFinal = (e: React.FormEvent) => {
+  const handleGuardarCotizacionFinal = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    try {
+      let idCliente = datosCliente.idCliente;
+      if (!idCliente && datosCliente.nit) {
+        try {
+          const respCli = await registrarCliente({
+            nitCliente: datosCliente.nit.trim(),
+            nombreCliente: `${datosCliente.nombre} ${datosCliente.apellido}`.trim(),
+            telefonoCliente: datosCliente.telefono || 'N/A',
+            direccionCliente: datosCliente.direccion || 'Ciudad',
+          });
+          idCliente = respCli?.data?.idCliente;
+        } catch {
+          // Ignorar error al crear cliente
+        }
+      }
+
+      let idUsuario = 1;
+      const u = localStorage.getItem('usuario');
+      if (u) {
+        const parsed = JSON.parse(u);
+        if (parsed?.idUsuario) idUsuario = Number(parsed.idUsuario);
+      }
+
+      if (idCliente && orden.length > 0) {
+        const respCot = await registrarCotizacion({
+          idCliente,
+          idUsuario,
+          totalCotizacion: total,
+          detalles: orden.map((item) => ({
+            idProducto: item.id,
+            cantidadCotizada: item.cantidad,
+            precioCotizado: item.precio,
+            subtotalCotizado: item.precio * item.cantidad,
+          })),
+        });
+
+        if (respCot?.data?.idCotizacion) {
+          const idStr = `COT-${String(respCot.data.idCotizacion).padStart(3, '0')}`;
+          const nuevaCotizacion: Cotizacion = {
+            id: idStr,
+            cliente: `${datosCliente.nombre} ${datosCliente.apellido}`.trim(),
+            nit: datosCliente.nit,
+            fecha: new Date().toISOString().split('T')[0],
+            total: total,
+            items: [...orden],
+          };
+
+          setCotizacionesGuardadas([nuevaCotizacion, ...cotizacionesGuardadas]);
+          alert(`¡Cotización ${idStr} guardada exitosamente!`);
+          setModalCotizacion(false);
+          setPasoConfirmacion(false);
+          setOrden([]);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Error llamando API cotizaciones, guardando en memoria:', err);
+    }
+
     const nuevaCotizacion: Cotizacion = {
       id: `COT-00${cotizacionesGuardadas.length + 1}`,
       cliente: `${datosCliente.nombre} ${datosCliente.apellido}`,
@@ -181,7 +360,7 @@ export default function CajeroPage() {
     };
 
     setCotizacionesGuardadas([nuevaCotizacion, ...cotizacionesGuardadas]);
-    alert(`¡Cotización ${nuevaCotizacion.id} guardada exitosamente sin necesidad de pago!`);
+    alert(`¡Cotización ${nuevaCotizacion.id} guardada exitosamente!`);
     setModalCotizacion(false);
     setPasoConfirmacion(false);
     setOrden([]);
@@ -203,13 +382,72 @@ export default function CajeroPage() {
     setModalCobro(true);
   };
 
-  const handleProcesarCobroFinal = (e: React.FormEvent) => {
+  const handleProcesarCobroFinal = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clienteNombre = cotizacionSeleccionadaParaPagar ? cotizacionSeleccionadaParaPagar.cliente : (datosCliente.nombre || 'Consumidor Final');
+    const clienteNombre = cotizacionSeleccionadaParaPagar
+      ? cotizacionSeleccionadaParaPagar.cliente
+      : datosCliente.nombre
+      ? `${datosCliente.nombre} ${datosCliente.apellido}`.trim()
+      : 'Consumidor Final';
     const montoFinal = cotizacionSeleccionadaParaPagar ? cotizacionSeleccionadaParaPagar.total : total;
+    const numFacGenerado = `FAC-100${facturasRealizadas.length + 1}`;
+
+    try {
+      let idUsuario = 1;
+      const u = localStorage.getItem('usuario');
+      if (u) {
+        const parsed = JSON.parse(u);
+        if (parsed?.idUsuario) idUsuario = Number(parsed.idUsuario);
+      }
+      const idCliente = datosCliente.idCliente || 1;
+
+      let idMedioPago = 1;
+      let refPago: string | null = null;
+      if (metodoPago === 'tarjeta') {
+        idMedioPago = 2;
+        refPago = `****${numeroTarjeta.slice(-4)}`;
+      } else if (metodoPago === 'cheque') {
+        idMedioPago = 3;
+        refPago = 'Cheque';
+      }
+
+      const itemsAFacturar =
+        cotizacionSeleccionadaParaPagar?.items && cotizacionSeleccionadaParaPagar.items.length > 0
+          ? cotizacionSeleccionadaParaPagar.items
+          : orden;
+
+      if (itemsAFacturar.length > 0) {
+        const idCot = cotizacionSeleccionadaParaPagar
+          ? Number(cotizacionSeleccionadaParaPagar.id.replace(/\D/g, '')) || undefined
+          : undefined;
+
+        await emitirFactura({
+          idCotizacion: idCot,
+          idCliente,
+          idUsuario,
+          numeroFactura: numFacGenerado,
+          totalFactura: montoFinal,
+          detalles: itemsAFacturar.map((i) => ({
+            idProducto: i.id,
+            cantidadVendida: i.cantidad,
+            precioVendido: i.precio,
+            subtotalVendido: i.precio * i.cantidad,
+          })),
+          pagos: [
+            {
+              idMedioPago,
+              montoPago: montoFinal,
+              referenciaPago: refPago,
+            },
+          ],
+        });
+      }
+    } catch (err) {
+      console.warn('Error llamando API emitirFactura, guardando local:', err);
+    }
 
     const nuevaFac: Factura = {
-      id: `FAC-100${facturasRealizadas.length + 1}`,
+      id: numFacGenerado,
       cliente: clienteNombre,
       total: montoFinal,
       fecha: new Date().toISOString().split('T')[0],
@@ -225,13 +463,29 @@ export default function CajeroPage() {
     }
 
     const detallePago = metodoPago === 'tarjeta' ? ` (Tarjeta: ****${numeroTarjeta.slice(-4)})` : '';
-    alert(`¡Cobro Procesado con Éxito!\nFactura emitida: ${nuevaFac.id}\nMétodo: ${metodoPago.toUpperCase()}${detallePago}\nTotal: Q ${montoFinal.toFixed(2)}`);
+    alert(
+      `¡Cobro Procesado con Éxito!\nFactura emitida: ${nuevaFac.id}\nMétodo: ${metodoPago.toUpperCase()}${detallePago}\nTotal: Q ${montoFinal.toFixed(
+        2
+      )}`
+    );
     setModalCobro(false);
     setCotizacionSeleccionadaParaPagar(null);
   };
 
-  const anularFactura = (idFactura: string) => {
+  const anularFactura = async (idFactura: string) => {
     if (confirm(`¿Está seguro de anular la factura ${idFactura}?`)) {
+      try {
+        let idUsuario = 1;
+        const u = localStorage.getItem('usuario');
+        if (u) {
+          const parsed = JSON.parse(u);
+          if (parsed?.idUsuario) idUsuario = Number(parsed.idUsuario);
+        }
+        await anularFacturaPorNumero(idFactura, idUsuario);
+      } catch (err) {
+        console.warn('Error al anular en BD, marcando local:', err);
+      }
+
       setFacturasRealizadas(
         facturasRealizadas.map((fac) =>
           fac.id === idFactura ? { ...fac, estado: 'Anulada' } : fac

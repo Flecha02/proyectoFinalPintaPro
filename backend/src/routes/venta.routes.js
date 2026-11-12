@@ -4,7 +4,8 @@ const {
     listarCotizaciones,
     buscarCotizacionPorId,
     emitirFactura,
-    buscarFacturaImpresion
+    buscarFacturaImpresion,
+    anularFacturaPorNumero
 } = require('../controllers/venta.controller');
 
 const router = Router();
@@ -15,5 +16,6 @@ router.get('/cotizaciones/:id', buscarCotizacionPorId);
 // Facturación
 router.post('/facturas', emitirFactura);
 router.get('/facturas/:id/impresion', buscarFacturaImpresion);
+router.put('/facturas/anular/:numeroFactura', anularFacturaPorNumero);
 
 module.exports = router;

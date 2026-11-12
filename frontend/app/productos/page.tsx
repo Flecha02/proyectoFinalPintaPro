@@ -1,8 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import {
+  actualizarProducto,
+  CategoriaApi,
+  crearProducto,
+  eliminarProducto as eliminarProductoApi,
+  listarCategorias,
+  listarMedidas,
+  listarProductos,
+  MedidaApi,
+} from '../../lib/api';
 
 interface Producto {
   id: number;
@@ -24,6 +34,9 @@ export default function ProductosDashboard() {
     { id: 3, codigo: 'P003', nombre: 'Brocha Profesional', categoria: 'Accesorios', marca: 'ProBrush', color: 'N/A', presentacion: 'N/A', precio: 25.00 },
   ]);
 
+  const [categoriasApi, setCategoriasApi] = useState<CategoriaApi[]>([]);
+  const [medidasApi, setMedidasApi] = useState<MedidaApi[]>([]);
+
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todos');
   const [busqueda, setBusqueda] = useState('');
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -31,6 +44,47 @@ export default function ProductosDashboard() {
   const [productoActual, setProductoActual] = useState<Producto>({ 
     id: 0, codigo: '', nombre: '', categoria: '', marca: '', color: '', presentacion: '', precio: '' 
   });
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarCatalogosYProductos() {
+      try {
+        const [respCat, respMed, respProd] = await Promise.all([
+          listarCategorias().catch(() => null),
+          listarMedidas().catch(() => null),
+          listarProductos().catch(() => null),
+        ]);
+
+        if (activo) {
+          if (respCat?.data) setCategoriasApi(respCat.data);
+          if (respMed?.data) setMedidasApi(respMed.data);
+          if (respProd?.data && respProd.data.length > 0) {
+            setProductos(
+              respProd.data.map((p) => ({
+                id: p.idProducto,
+                codigo: p.codigoProducto,
+                nombre: p.nombreProducto,
+                categoria: p.nombreCategoria || 'General',
+                marca: p.marcaProducto || 'PintaPro',
+                color: p.colorProducto || 'N/A',
+                presentacion: p.descripcionMedida || 'Unidad',
+                precio: Number(p.precioVentaProducto || 0),
+              }))
+            );
+          }
+        }
+      } catch {
+        // Fallback en memoria
+      }
+    }
+
+    cargarCatalogosYProductos();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   // Reglas de categoría, color y presentación
   const handleCategoriaChange = (nuevaCategoria: string) => {
@@ -84,6 +138,7 @@ export default function ProductosDashboard() {
 
   const handleCerrarSesion = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('usuario');
     router.push('/login');
   };
 
@@ -99,18 +154,64 @@ export default function ProductosDashboard() {
     setModalAbierto(true);
   };
 
-  const eliminarProducto = (id: number) => {
+  const eliminarProducto = async (id: number) => {
     if (confirm('¿Estás segura de eliminar este producto?')) {
+      try {
+        await eliminarProductoApi(id);
+      } catch (err) {
+        console.warn('Error al eliminar en API:', err);
+      }
       setProductos(productos.filter((p) => p.id !== id));
     }
   };
 
-  const guardarProducto = (e: React.FormEvent) => {
+  const guardarProducto = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const catObj = categoriasApi.find(
+      (c) => c.nombreCategoria.toLowerCase() === productoActual.categoria.toLowerCase()
+    );
+    const idCategoria = catObj?.idCategoria || 1;
+
+    const medObj = medidasApi.find(
+      (m) => m.descripcionMedida.toLowerCase() === productoActual.presentacion.toLowerCase()
+    );
+    const idMedidaPresentacion = medObj?.idMedidaPresentacion || 1;
+
+    let idGenerado = productoActual.id;
+    try {
+      if (modoEdicion && productoActual.id > 0) {
+        await actualizarProducto(productoActual.id, {
+          idCategoria,
+          idMedidaPresentacion,
+          codigoProducto: productoActual.codigo,
+          nombreProducto: productoActual.nombre,
+          marcaProducto: productoActual.marca,
+          colorProducto: productoActual.color === 'N/A' ? null : productoActual.color,
+          precioVentaProducto: Number(productoActual.precio) || 0,
+        });
+      } else {
+        const resp = await crearProducto({
+          idCategoria,
+          idMedidaPresentacion,
+          codigoProducto: productoActual.codigo,
+          nombreProducto: productoActual.nombre,
+          marcaProducto: productoActual.marca,
+          colorProducto: productoActual.color === 'N/A' ? null : productoActual.color,
+          precioVentaProducto: Number(productoActual.precio) || 0,
+        });
+        if (resp?.data?.idProducto) {
+          idGenerado = resp.data.idProducto;
+        }
+      }
+    } catch (err) {
+      console.warn('Error llamando API producto, guardando en memoria:', err);
+    }
+
     if (modoEdicion) {
       setProductos(productos.map((p) => (p.id === productoActual.id ? productoActual : p)));
     } else {
-      const nuevo = { ...productoActual, id: Date.now() };
+      const nuevo = { ...productoActual, id: idGenerado || (productos.length + 1) };
       setProductos([...productos, nuevo]);
     }
     setModalAbierto(false);
@@ -133,8 +234,12 @@ export default function ProductosDashboard() {
             <Image src="/PintaPro.png" alt="Logo" fill className="object-contain" />
           </div>
           <nav className="flex flex-col gap-4 text-gray-300">
-            <button className="p-3 bg-blue-700 text-white rounded-xl shadow"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-            <button className="p-3 hover:bg-blue-800 rounded-xl transition"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></button>
+            <button className="p-3 bg-blue-700 text-white rounded-xl shadow" title="Catálogo de Productos">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <button onClick={() => router.push('/compras')} className="p-3 hover:bg-blue-800 rounded-xl transition" title="Compras e Ingreso a Bodega">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+            </button>
           </nav>
         </div>
         <button onClick={handleCerrarSesion} className="p-3 bg-red-600 hover:bg-red-700 rounded-xl text-white shadow transition" title="Cerrar Sesión">
