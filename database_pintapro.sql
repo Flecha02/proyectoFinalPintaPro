@@ -843,7 +843,7 @@ WHERE u.correoUsuario = p_correo
 
 DROP PROCEDURE IF EXISTS `sp_AnularFactura` ;;
 CREATE PROCEDURE `sp_AnularFactura`(
-    IN p_numeroFactura VARCHAR(50),
+    IN p_numeroFactura VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
     IN p_idUsuario INT,
     OUT p_resultado INT,
     OUT p_mensaje VARCHAR(255)
@@ -852,19 +852,22 @@ BEGIN
     DECLARE v_idFactura INT;
     DECLARE v_idCotizacion INT;
     DECLARE v_estado VARCHAR(30);
+    DECLARE v_err_msg TEXT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_err_msg = MESSAGE_TEXT;
         ROLLBACK;
         SET p_resultado = 0;
-        SET p_mensaje = 'Error al anular la factura y restituir el inventario.';
+        SET p_mensaje = SUBSTRING(CONCAT('Error al anular la factura: ', v_err_msg), 1, 255);
     END;
 
     START TRANSACTION;
 
     SELECT idFactura, idCotizacion, estadoFactura INTO v_idFactura, v_idCotizacion, v_estado 
     FROM factura 
-    WHERE numeroFactura = p_numeroFactura OR idFactura = p_numeroFactura;
+    WHERE numeroFactura = p_numeroFactura
+       OR (p_numeroFactura REGEXP '^[0-9]+$' AND idFactura = CAST(p_numeroFactura AS UNSIGNED));
 
     IF v_idFactura IS NULL THEN
         ROLLBACK;
