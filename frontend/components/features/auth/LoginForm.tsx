@@ -82,7 +82,7 @@ export const LoginForm: React.FC = () => {
 
       <Button
         type="submit"
-        variant="secondary"
+        variant="primary"
         cargando={cargando}
         fullWidth
         size="lg"

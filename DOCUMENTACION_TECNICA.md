@@ -23,15 +23,15 @@ Se implementó un pipeline DevOps integral para el sistema de facturación e inv
 
 ---
 
-## 🏛️ 2. Arquitectura del Sistema
+## 2. Arquitectura del Sistema
 
 La solución utiliza una arquitectura desacoplada en tres capas con aislamiento de red y proxy inverso automatizado.
 
 ```mermaid
 graph TD
-    User([🌐 Usuario / Navegador]) -->|HTTPS:443| Traefik[Traefik v3.6 - Reverse Proxy & SSL]
+    User([Usuario / Navegador]) -->|HTTPS:443| Traefik[Traefik v3.6 - Reverse Proxy & SSL]
     
-    subgraph Oracle Cloud VPS [☁️ Oracle Cloud Compute VPS - Ubuntu 22.04 LTS]
+    subgraph Oracle Cloud VPS [Oracle Cloud Compute VPS - Ubuntu 22.04 LTS]
         Traefik -->|Ruta: app.163.192.145.126.nip.io| Frontend[Next.js 16 Frontend - Puerto 3000]
         Traefik -->|Ruta: api.163.192.145.126.nip.io| Backend[Node.js / Express API - Puerto 4000]
         
