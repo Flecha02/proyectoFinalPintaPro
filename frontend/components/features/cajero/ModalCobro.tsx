@@ -9,6 +9,13 @@ import { Button } from '../../ui/Button';
 import { Factura } from '../../../lib/types';
 import { buscarClientes, emitirFactura, obtenerFacturaParaImpresion, registrarCliente } from '../../../lib/api';
 import { useToast } from '../../../context/ToastContext';
+import {
+  MENSAJES,
+  esNit,
+  esNombreCliente,
+  esTarjetaValida,
+  normalizarTexto,
+} from '../../../lib/validators';
 
 export interface ModalCobroProps {
   isOpen: boolean;
@@ -65,6 +72,7 @@ export const ModalCobro: React.FC<ModalCobroProps> = ({
   const [buscando, setBuscando] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState('');
+  const [erroresCliente, setErroresCliente] = useState<{ nit?: string; nombre?: string }>({});
 
   useEffect(() => {
     if (isOpen) {
@@ -151,11 +159,6 @@ export const ModalCobro: React.FC<ModalCobroProps> = ({
     actualizarLineaPago(id, { monto: restante.toFixed(2) });
   };
 
-  const esTarjetaValida = (num: string) => {
-    const soloNumeros = num.replace(/\s|-/g, '');
-    return /^\d{15,16}$/.test(soloNumeros);
-  };
-
   const handleBuscarNit = async () => {
     if (!nit.trim()) return;
     setBuscando(true);
@@ -168,6 +171,7 @@ export const ModalCobro: React.FC<ModalCobroProps> = ({
         setNombre(c.nombreCliente);
         setTelefono(c.telefonoCliente || '');
         setDireccion(c.direccionCliente || 'Ciudad');
+        setErroresCliente({});
       } else {
         setIdCliente(null);
         setError('Cliente no registrado. Ingresa su nombre para registrarlo automáticamente.');
@@ -182,6 +186,23 @@ export const ModalCobro: React.FC<ModalCobroProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0 || !user?.idUsuario) return;
+
+    // Validación de los datos de facturación (regex compartidas con el backend)
+    const nitFinal = tipoCliente === 'CF' ? 'CF' : normalizarTexto(nit);
+    const nuevosErroresCliente: { nit?: string; nombre?: string } = {};
+    if (!esNit(nitFinal)) {
+      nuevosErroresCliente.nit = MENSAJES.NIT;
+    }
+    if (!esNombreCliente(nombre)) {
+      nuevosErroresCliente.nombre = MENSAJES.NOMBRE_CLIENTE;
+    }
+    setErroresCliente(nuevosErroresCliente);
+    if (Object.keys(nuevosErroresCliente).length > 0) {
+      const msg = 'Revisa el NIT y el nombre del cliente antes de emitir la factura.';
+      setError(msg);
+      mostrarError(msg, 'Datos del cliente inválidos');
+      return;
+    }
 
     if (modoPago === 'UNICO') {
       if (metodoPago === 1 && Number(montoEfectivo) < total) {
@@ -362,6 +383,7 @@ export const ModalCobro: React.FC<ModalCobroProps> = ({
                 setNit('CF');
                 setNombre('Consumidor Final');
                 setIdCliente(5);
+                setErroresCliente({});
               }}
               className={`p-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                 tipoCliente === 'CF'
@@ -378,6 +400,7 @@ export const ModalCobro: React.FC<ModalCobroProps> = ({
                 setNit('');
                 setNombre('');
                 setIdCliente(null);
+                setErroresCliente({});
               }}
               className={`p-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                 tipoCliente === 'NIT'
@@ -401,7 +424,10 @@ export const ModalCobro: React.FC<ModalCobroProps> = ({
                     onChange={(e) => {
                       setNit(e.target.value);
                       setIdCliente(null);
+                      setErroresCliente((prev) => ({ ...prev, nit: undefined }));
                     }}
+                    error={erroresCliente.nit}
+                    helperText="CF, C/F o formato guatemalteco válido."
                   />
                 </div>
                 <Button
@@ -418,7 +444,12 @@ export const ModalCobro: React.FC<ModalCobroProps> = ({
                 placeholder="Nombre o Razón Social"
                 required
                 value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
+                onChange={(e) => {
+                  setNombre(e.target.value);
+                  setErroresCliente((prev) => ({ ...prev, nombre: undefined }));
+                }}
+                error={erroresCliente.nombre}
+                helperText="Solo letras, tildes, ñ, espacios, puntos y comas."
               />
             </div>
           )}

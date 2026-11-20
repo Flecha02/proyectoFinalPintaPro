@@ -1,34 +1,47 @@
 const { crearProveedor, obtenerProveedores, obtenerProveedorPorId, actualizarProveedor, eliminarProveedor } = require('../models/proveedor.model');
-// Validaciones actualizadas para Guatemala
-function validarNitDpi(valor) {
-    if (!valor) return false;
-    const limpio = valor.trim().toUpperCase();
-    if (limpio === 'CF' || limpio === 'C.F.') return true;
-    const regexNitDpi = /^([0-9]+-?[0-9K]{1}|[0-9]{13})$/;
-    return regexNitDpi.test(limpio);
+const {
+    MENSAJES,
+    normalizarTexto,
+    esNombreCliente,
+    esNit,
+    esTelefono
+} = require('../utils/validators');
+
+function validarDatosProveedor(nitProveedor, nombreProveedor, telefonoProveedor) {
+    const nit = normalizarTexto(nitProveedor).toUpperCase();
+    const nombre = normalizarTexto(nombreProveedor);
+    const telefono = normalizarTexto(telefonoProveedor);
+
+    if (!esNombreCliente(nombre)) {
+        return MENSAJES.NOMBRE_CLIENTE;
+    }
+    if (!esNit(nit)) {
+        return MENSAJES.NIT;
+    }
+    // El teléfono es opcional, pero si se envía debe tener el formato correcto.
+    if (telefono !== '' && !esTelefono(telefono)) {
+        return MENSAJES.TELEFONO;
+    }
+    return null;
 }
-function validarTelefonoGT(telefono) {
-    if (!telefono) return true; // Opcional según la BD
-    const regexTel = /^(\+?502)?[\s-]?[2-7][0-9]{3}[\s-]?[0-9]{4}$/;
-    return regexTel.test(telefono.trim());
-}
+
 async function registrar(req, res) {
     try {
         const { nitProveedor, nombreProveedor, telefonoProveedor, direccionProveedor} = req.body;
-        if (!nombreProveedor || nombreProveedor.trim() === '') {
-            return res.status(400).json({ status: 'error', message: 'El nombre del proveedor es obligatorio.' });
+
+        const errorValidacion = validarDatosProveedor(nitProveedor, nombreProveedor, telefonoProveedor);
+        if (errorValidacion) {
+            return res.status(400).json({ status: 'error', message: errorValidacion });
         }
-        if (!validarNitDpi(nitProveedor)) {
-            return res.status(400).json({ status: 'error', message: 'El formato del NIT o DPI no es válido.' });
-        }
-        if (!validarTelefonoGT(telefonoProveedor)) {
-            return res.status(400).json({ status: 'error', message: 'El teléfono del proveedor no es un formato válido para Guatemala.' });
-        }
+
+        const telefono = normalizarTexto(telefonoProveedor);
+        const direccion = normalizarTexto(direccionProveedor);
+
         const idProveedor = await crearProveedor(
-            nitProveedor.trim(), 
-            nombreProveedor.trim(), 
-            telefonoProveedor ? telefonoProveedor.trim() : null, 
-            direccionProveedor ? direccionProveedor.trim() : null
+            normalizarTexto(nitProveedor).toUpperCase(), 
+            normalizarTexto(nombreProveedor), 
+            telefono ? telefono : null, 
+            direccion ? direccion : null
         );
         res.status(201).json({
             status: 'success',
@@ -42,6 +55,7 @@ async function registrar(req, res) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 }
+
 async function listar(req, res) {
     try {
         const proveedores = await obtenerProveedores();
@@ -50,6 +64,7 @@ async function listar(req, res) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 }
+
 async function buscarPorId(req, res) {
     try {
         const { id } = req.params;
@@ -62,25 +77,26 @@ async function buscarPorId(req, res) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 }
+
 async function actualizar(req, res) {
     try {
         const { id } = req.params;
         const { nitProveedor, nombreProveedor, telefonoProveedor, direccionProveedor} = req.body;
-        if (!nombreProveedor || nombreProveedor.trim() === '') {
-            return res.status(400).json({ status: 'error', message: 'El nombre del proveedor es obligatorio.' });
+
+        const errorValidacion = validarDatosProveedor(nitProveedor, nombreProveedor, telefonoProveedor);
+        if (errorValidacion) {
+            return res.status(400).json({ status: 'error', message: errorValidacion });
         }
-        if (!validarNitDpi(nitProveedor)) {
-            return res.status(400).json({ status: 'error', message: 'El formato del NIT o DPI no es válido.' });
-        }
-        if (!validarTelefonoGT(telefonoProveedor)) {
-            return res.status(400).json({ status: 'error', message: 'El teléfono del proveedor no es un formato válido para Guatemala.' });
-        }
+
+        const telefono = normalizarTexto(telefonoProveedor);
+        const direccion = normalizarTexto(direccionProveedor);
+
         const filasAfectadas = await actualizarProveedor(
             id, 
-            nitProveedor.trim(), 
-            nombreProveedor.trim(), 
-            telefonoProveedor ? telefonoProveedor.trim() : null, 
-            direccionProveedor ? direccionProveedor.trim() : null
+            normalizarTexto(nitProveedor).toUpperCase(), 
+            normalizarTexto(nombreProveedor), 
+            telefono ? telefono : null, 
+            direccion ? direccion : null
         );
         if (filasAfectadas === 0) {
             return res.status(404).json({ status: 'error', message: 'Proveedor no encontrado para actualizar.' });
@@ -93,6 +109,7 @@ async function actualizar(req, res) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 }
+
 async function eliminar(req, res) {
     try {
         const { id } = req.params;
@@ -111,6 +128,7 @@ async function eliminar(req, res) {
         res.status(400).json({ status: 'error', message: error.message });
     }
 }
+
 module.exports = {
     registrar,
     listar,

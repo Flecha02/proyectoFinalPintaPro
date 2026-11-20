@@ -5,6 +5,13 @@ import { Proveedor } from '../../../lib/types';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Modal } from '../../ui/Modal';
+import {
+  MENSAJES,
+  esNit,
+  esNombreCliente,
+  esTelefono,
+  normalizarTexto,
+} from '../../../lib/validators';
 
 export interface ProveedoresSectionProps {
   proveedores: Proveedor[];
@@ -14,6 +21,12 @@ export interface ProveedoresSectionProps {
     telefonoProveedor: string;
     direccionProveedor: string;
   }) => Promise<void>;
+}
+
+interface ErroresProveedor {
+  nit?: string;
+  nombre?: string;
+  telefono?: string;
 }
 
 export const ProveedoresSection: React.FC<ProveedoresSectionProps> = ({
@@ -27,27 +40,47 @@ export const ProveedoresSection: React.FC<ProveedoresSectionProps> = ({
   const [direccion, setDireccion] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+  const [errores, setErrores] = useState<ErroresProveedor>({});
+
+  const validar = (): ErroresProveedor => {
+    const nuevosErrores: ErroresProveedor = {};
+
+    if (!esNit(nit)) {
+      nuevosErrores.nit = MENSAJES.NIT;
+    }
+    if (!esNombreCliente(nombre)) {
+      nuevosErrores.nombre = MENSAJES.NOMBRE_CLIENTE;
+    }
+    if (normalizarTexto(telefono) !== '' && !esTelefono(telefono)) {
+      nuevosErrores.telefono = MENSAJES.TELEFONO;
+    }
+
+    return nuevosErrores;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nit.trim() || !nombre.trim()) {
-      setError('NIT y Nombre del proveedor son requeridos.');
+    setError('');
+
+    const nuevosErrores = validar();
+    setErrores(nuevosErrores);
+    if (Object.keys(nuevosErrores).length > 0) {
       return;
     }
 
     setCargando(true);
-    setError('');
     try {
       await onCrearProveedor({
-        nitProveedor: nit.trim(),
-        nombreProveedor: nombre.trim(),
-        telefonoProveedor: telefono.trim(),
-        direccionProveedor: direccion.trim(),
+        nitProveedor: normalizarTexto(nit).toUpperCase(),
+        nombreProveedor: normalizarTexto(nombre),
+        telefonoProveedor: normalizarTexto(telefono),
+        direccionProveedor: normalizarTexto(direccion),
       });
       setNit('');
       setNombre('');
       setTelefono('');
       setDireccion('');
+      setErrores({});
       setModalAbierto(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al registrar el proveedor');
@@ -102,7 +135,7 @@ export const ProveedoresSection: React.FC<ProveedoresSectionProps> = ({
         title="Registrar Nuevo Proveedor"
         description="Ingresa los datos del nuevo proveedor para órdenes de compra."
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           {error && (
             <div className="p-3 bg-red-50 text-red-700 rounded-xl text-xs font-semibold" role="alert">
               {error}
@@ -114,7 +147,12 @@ export const ProveedoresSection: React.FC<ProveedoresSectionProps> = ({
             required
             placeholder="ej. 876543-2 o CF"
             value={nit}
-            onChange={(e) => setNit(e.target.value)}
+            onChange={(e) => {
+              setNit(e.target.value);
+              setErrores((prev) => ({ ...prev, nit: undefined }));
+            }}
+            error={errores.nit}
+            helperText="CF, C/F o formato guatemalteco válido."
           />
 
           <Input
@@ -122,14 +160,24 @@ export const ProveedoresSection: React.FC<ProveedoresSectionProps> = ({
             required
             placeholder="ej. Distribuidora de Pinturas Celco S.A."
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => {
+              setNombre(e.target.value);
+              setErrores((prev) => ({ ...prev, nombre: undefined }));
+            }}
+            error={errores.nombre}
+            helperText="Solo letras, tildes, ñ, espacios, puntos y comas."
           />
 
           <Input
             label="Teléfono"
             placeholder="ej. 2345-6789"
             value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
+            onChange={(e) => {
+              setTelefono(e.target.value);
+              setErrores((prev) => ({ ...prev, telefono: undefined }));
+            }}
+            error={errores.telefono}
+            helperText="8 dígitos, opcionalmente con guion."
           />
 
           <Input

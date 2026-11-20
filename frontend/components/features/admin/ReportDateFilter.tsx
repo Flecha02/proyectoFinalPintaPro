@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
+import { MENSAJES, esFechaISO, esRangoFechasValido } from '../../../lib/validators';
 
 export interface ReportDateFilterProps {
   fechaInicio: string;
@@ -21,8 +22,28 @@ export const ReportDateFilter: React.FC<ReportDateFilterProps> = ({
   onConsultar,
   cargando = false,
 }) => {
+  const [errores, setErrores] = useState<{ fechaInicio?: string; fechaFin?: string }>({});
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const nuevosErrores: { fechaInicio?: string; fechaFin?: string } = {};
+
+    if (!esFechaISO(fechaInicio)) {
+      nuevosErrores.fechaInicio = MENSAJES.FECHA_ISO;
+    }
+    if (!esFechaISO(fechaFin)) {
+      nuevosErrores.fechaFin = MENSAJES.FECHA_ISO;
+    }
+    if (!nuevosErrores.fechaInicio && !nuevosErrores.fechaFin && !esRangoFechasValido(fechaInicio, fechaFin)) {
+      nuevosErrores.fechaInicio = MENSAJES.RANGO_FECHAS;
+    }
+
+    setErrores(nuevosErrores);
+    if (Object.keys(nuevosErrores).length > 0) {
+      return;
+    }
+
     onConsultar();
   };
 
@@ -30,6 +51,7 @@ export const ReportDateFilter: React.FC<ReportDateFilterProps> = ({
     <form
       onSubmit={handleSubmit}
       className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col sm:flex-row sm:items-end gap-3"
+      noValidate
     >
       <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
@@ -37,14 +59,24 @@ export const ReportDateFilter: React.FC<ReportDateFilterProps> = ({
           type="date"
           required
           value={fechaInicio}
-          onChange={(e) => onFechaInicioChange(e.target.value)}
+          onChange={(e) => {
+            onFechaInicioChange(e.target.value);
+            setErrores((prev) => ({ ...prev, fechaInicio: undefined }));
+          }}
+          error={errores.fechaInicio}
+          helperText="Formato YYYY-MM-DD."
         />
         <Input
           label="Fecha de Fin"
           type="date"
           required
           value={fechaFin}
-          onChange={(e) => onFechaFinChange(e.target.value)}
+          onChange={(e) => {
+            onFechaFinChange(e.target.value);
+            setErrores((prev) => ({ ...prev, fechaFin: undefined }));
+          }}
+          error={errores.fechaFin}
+          helperText="Debe ser igual o posterior al inicio."
         />
       </div>
       <Button

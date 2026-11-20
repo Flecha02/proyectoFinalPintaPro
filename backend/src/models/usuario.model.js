@@ -17,7 +17,45 @@ async function validarLoginUsuario(correoUsuario, contraseniaUsuario) {
     return rows[0]; 
 }
 
+async function obtenerUsuarios() {
+    const query = `
+        SELECT
+            u.idUsuario,
+            u.idRol,
+            u.nombreUsuario,
+            u.correoUsuario,
+            u.estadoUsuario,
+            r.nombreRol
+        FROM Usuario u
+        INNER JOIN Rol r ON u.idRol = r.idRol
+        ORDER BY u.idUsuario DESC
+    `;
+    const [rows] = await pool.query(query);
+    return rows;
+}
+
+async function obtenerRoles() {
+    const query = `
+        SELECT idRol, nombreRol, descripcionRol
+        FROM Rol
+        ORDER BY idRol
+    `;
+    const [rows] = await pool.query(query);
+    return rows;
+}
+
+async function obtenerRolPorId(idRol) {
+    const [rows] = await pool.query(
+        'SELECT idRol, nombreRol, descripcionRol FROM Rol WHERE idRol = ?',
+        [idRol]
+    );
+    return rows[0] || null;
+}
+
 module.exports = {
     registrarUsuario,
-    validarLoginUsuario
+    validarLoginUsuario,
+    obtenerUsuarios,
+    obtenerRoles,
+    obtenerRolPorId
 };

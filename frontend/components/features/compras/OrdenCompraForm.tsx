@@ -5,6 +5,11 @@ import { Producto, Proveedor } from '../../../lib/types';
 import { Select } from '../../ui/Select';
 import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
+import {
+  MENSAJES,
+  esCantidadEntera,
+  esPrecioDecimal,
+} from '../../../lib/validators';
 
 export interface LineaCompra {
   idProducto: number;
@@ -38,13 +43,27 @@ export const OrdenCompraForm: React.FC<OrdenCompraFormProps> = ({
   const [lineas, setLineas] = useState<LineaCompra[]>([]);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+  const [errores, setErrores] = useState<{ producto?: string; cantidad?: string; precio?: string }>({});
 
   const handleAgregarLinea = () => {
-    const cantNum = Number(cantidad);
-    if (!productoId || !Number.isInteger(cantNum) || cantNum <= 0 || Number(precio) < 0) {
-      setError('Debes seleccionar un producto e indicar una cantidad entera positiva (mayor a 0) y precio válido.');
+    const nuevosErrores: { producto?: string; cantidad?: string; precio?: string } = {};
+
+    if (!productoId) {
+      nuevosErrores.producto = 'Selecciona un producto.';
+    }
+    if (!esCantidadEntera(cantidad)) {
+      nuevosErrores.cantidad = MENSAJES.CANTIDAD_ENTERA;
+    }
+    if (!esPrecioDecimal(precio)) {
+      nuevosErrores.precio = MENSAJES.PRECIO_DECIMAL;
+    }
+
+    setErrores(nuevosErrores);
+    if (Object.keys(nuevosErrores).length > 0) {
+      setError('Revisa los campos marcados antes de agregar el producto.');
       return;
     }
+
     const prod = productos.find((p) => p.idProducto === Number(productoId));
     if (!prod) return;
 
@@ -53,7 +72,7 @@ export const OrdenCompraForm: React.FC<OrdenCompraFormProps> = ({
       {
         idProducto: prod.idProducto,
         nombreProducto: prod.nombreProducto,
-        cantidadSolicitada: cantNum,
+        cantidadSolicitada: Number(cantidad),
         precioAcordado: Number(precio),
       },
     ]);
@@ -61,6 +80,7 @@ export const OrdenCompraForm: React.FC<OrdenCompraFormProps> = ({
     setCantidad('');
     setPrecio('');
     setError('');
+    setErrores({});
   };
 
   const handleQuitarLinea = (index: number) => {
@@ -142,6 +162,7 @@ export const OrdenCompraForm: React.FC<OrdenCompraFormProps> = ({
               onChange={(e) => {
                 const val = Number(e.target.value);
                 setProductoId(val);
+                setErrores((prev) => ({ ...prev, producto: undefined }));
                 const prod = productos.find((p) => p.idProducto === val);
                 if (prod && !precio) {
                   setPrecio(String(prod.precioVentaProducto));
@@ -152,6 +173,7 @@ export const OrdenCompraForm: React.FC<OrdenCompraFormProps> = ({
                 value: p.idProducto,
                 label: `${p.codigoProducto} - ${p.nombreProducto}`,
               }))}
+              error={errores.producto}
             />
           </div>
           <div>
@@ -165,18 +187,26 @@ export const OrdenCompraForm: React.FC<OrdenCompraFormProps> = ({
               onChange={(e) => {
                 const val = e.target.value.replace(/[^0-9]/g, '');
                 setCantidad(val);
+                setErrores((prev) => ({ ...prev, cantidad: undefined }));
               }}
+              error={errores.cantidad}
+              helperText="Entero mayor a 0."
             />
           </div>
           <div>
             <Input
               label="Precio Acordado (Q)"
               type="number"
-              min="0"
+              min="0.01"
               step="0.01"
               placeholder="0.00"
               value={precio}
-              onChange={(e) => setPrecio(e.target.value)}
+              onChange={(e) => {
+                setPrecio(e.target.value);
+                setErrores((prev) => ({ ...prev, precio: undefined }));
+              }}
+              error={errores.precio}
+              helperText="Decimal mayor a 0 (máx. 2 decimales)."
             />
           </div>
         </div>

@@ -60,6 +60,41 @@ export function iniciarSesion(
   });
 }
 
+export interface RolApi {
+  idRol: number;
+  nombreRol: string;
+  descripcionRol?: string | null;
+}
+
+export interface UsuarioApi {
+  idUsuario: number;
+  idRol: number;
+  nombreUsuario: string;
+  correoUsuario: string;
+  estadoUsuario: number;
+  nombreRol: string;
+}
+
+export function listarRoles() {
+  return apiRequest<ApiResponse<RolApi[]>>('/usuarios/roles');
+}
+
+export function listarUsuarios() {
+  return apiRequest<ApiResponse<UsuarioApi[]>>('/usuarios');
+}
+
+export function registrarUsuario(usuario: {
+  idRol: number;
+  nombreUsuario: string;
+  correoUsuario: string;
+  contraseniaUsuario: string;
+}) {
+  return apiRequest<ApiResponse<{ idUsuario: number; nombreRol?: string }>>('/usuarios/registro', {
+    method: 'POST',
+    body: JSON.stringify(usuario),
+  });
+}
+
 export interface ApiResponse<T> {
   status: string;
   message?: string;

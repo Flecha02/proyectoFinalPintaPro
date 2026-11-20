@@ -6,6 +6,13 @@ import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
 import { Select } from '../../ui/Select';
 import { Button } from '../../ui/Button';
+import {
+  MENSAJES,
+  esCantidadEntera,
+  esCodigoLote,
+  esPrecioDecimal,
+  normalizarTexto,
+} from '../../../lib/validators';
 
 export interface LineaRecepcion extends DetalleOrdenCompra {
   codigoLote: string;
@@ -32,6 +39,13 @@ export interface ModalIngresoBodegaProps {
   }) => Promise<void>;
 }
 
+interface ErroresLinea {
+  lote?: string;
+  cantidad?: string;
+  costo?: string;
+  ubicacion?: string;
+}
+
 export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
   isOpen,
   onClose,
@@ -42,6 +56,7 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
   const [lineas, setLineas] = useState<LineaRecepcion[]>([]);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+  const [errores, setErrores] = useState<Record<number, ErroresLinea>>({});
 
   useEffect(() => {
     if (orden && orden.detalles) {
@@ -62,10 +77,12 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
       );
     }
     setError('');
+    setErrores({});
   }, [orden, ubicaciones, isOpen]);
 
   const handleUpdateLinea = (index: number, patch: Partial<LineaRecepcion>) => {
     setLineas(lineas.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+    setErrores((prev) => ({ ...prev, [index]: {} }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,28 +97,40 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
       return;
     }
 
-    for (const linea of lotesValidos) {
-      const cant = Number(linea.cantidadRecibida);
-      if (!Number.isInteger(cant) || cant <= 0) {
-        setError(`La cantidad a recibir de "${linea.nombreProducto}" debe ser un número entero mayor a 0.`);
-        return;
-      }
+    const nuevosErrores: Record<number, ErroresLinea> = {};
+    lineas.forEach((linea, index) => {
+      if (Number(linea.cantidadRecibida) <= 0) return;
+
+      const erroresLinea: ErroresLinea = {};
       const pendiente =
         linea.cantidadPendiente !== undefined
           ? linea.cantidadPendiente
           : Math.max(0, Number(linea.cantidadSolicitada) - Number(linea.cantidadYaRecibida || 0));
-      if (cant > pendiente) {
-        setError(`La cantidad de "${linea.nombreProducto}" (${cant}) supera lo pendiente por recibir (${pendiente}).`);
-        return;
+
+      if (!esCodigoLote(linea.codigoLote)) {
+        erroresLinea.lote = MENSAJES.CODIGO_LOTE;
       }
-      if (!linea.codigoLote.trim()) {
-        setError(`Debes ingresar el código de lote para "${linea.nombreProducto}".`);
-        return;
+      if (!esCantidadEntera(linea.cantidadRecibida)) {
+        erroresLinea.cantidad = MENSAJES.CANTIDAD_ENTERA;
+      } else if (Number(linea.cantidadRecibida) > pendiente) {
+        erroresLinea.cantidad = `No puede superar lo pendiente por recibir (${pendiente}).`;
+      }
+      if (!esPrecioDecimal(linea.costoUnitario)) {
+        erroresLinea.costo = MENSAJES.PRECIO_DECIMAL;
       }
       if (!linea.idUbicacionBodega) {
-        setError(`Debes seleccionar la ubicación en bodega para "${linea.nombreProducto}".`);
-        return;
+        erroresLinea.ubicacion = 'Selecciona una ubicación en bodega.';
       }
+
+      if (Object.keys(erroresLinea).length > 0) {
+        nuevosErrores[index] = erroresLinea;
+      }
+    });
+
+    setErrores(nuevosErrores);
+    if (Object.keys(nuevosErrores).length > 0) {
+      setError('Revisa los campos marcados en los lotes antes de confirmar el ingreso.');
+      return;
     }
 
     setCargando(true);
@@ -112,7 +141,7 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
         lotesIngreso: lotesValidos.map((l) => ({
           idProducto: l.idProducto,
           idUbicacionBodega: Number(l.idUbicacionBodega),
-          codigoLote: l.codigoLote.trim(),
+          codigoLote: normalizarTexto(l.codigoLote),
           cantidadRecibida: Number(l.cantidadRecibida),
           costoUnitario: Number(l.costoUnitario),
         })),
@@ -133,7 +162,7 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
       description="Registra los lotes físicos recibidos. Puedes recibir entregas parciales y completar el resto en días posteriores."
       maxWidth="4xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {error && (
           <div className="p-3 bg-red-50 text-red-700 rounded-xl text-xs font-semibold" role="alert">
             {error}
@@ -157,6 +186,7 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
                 : Math.max(0, Number(linea.cantidadSolicitada) - Number(linea.cantidadYaRecibida || 0));
             const yaRecibido = Number(linea.cantidadYaRecibida || 0);
             const completado = pendiente <= 0;
+            const erroresLinea = errores[index] || {};
 
             return (
               <div
@@ -165,7 +195,7 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
                   completado
                     ? 'border-gray-200 bg-gray-100/60 opacity-75'
                     : 'border-gray-200 bg-gray-50/70 hover:border-blue-200'
-                } grid grid-cols-1 md:grid-cols-4 gap-3 text-xs`}
+                } grid grid-cols-1 md:grid-cols-5 gap-3 text-xs`}
               >
                 <div className="md:col-span-1 flex flex-col justify-center space-y-1">
                   <span className="font-bold text-gray-900 text-sm leading-tight">
@@ -199,6 +229,8 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
                     disabled={completado}
                     value={linea.codigoLote}
                     onChange={(e) => handleUpdateLinea(index, { codigoLote: e.target.value })}
+                    error={erroresLinea.lote}
+                    helperText="Alfanumérico y guiones (2 a 30)."
                   />
                 </div>
 
@@ -217,6 +249,7 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
                       const numVal = cleanVal === '' ? 0 : Number(cleanVal);
                       handleUpdateLinea(index, { cantidadRecibida: Math.min(numVal, pendiente) });
                     }}
+                    error={erroresLinea.cantidad}
                   />
                   {!completado && (
                     <div className="flex items-center gap-2 mt-1.5 text-[11px]">
@@ -240,6 +273,21 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
                 </div>
 
                 <div>
+                  <Input
+                    label="Costo Unitario (Q)"
+                    required={!completado && Number(linea.cantidadRecibida) > 0}
+                    disabled={completado}
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={linea.costoUnitario}
+                    onChange={(e) => handleUpdateLinea(index, { costoUnitario: Number(e.target.value) })}
+                    error={erroresLinea.costo}
+                    helperText="Decimal mayor a 0."
+                  />
+                </div>
+
+                <div>
                   <Select
                     label="Ubicación en Bodega"
                     required={!completado && Number(linea.cantidadRecibida) > 0}
@@ -250,6 +298,7 @@ export const ModalIngresoBodega: React.FC<ModalIngresoBodegaProps> = ({
                       value: u.idUbicacionBodega,
                       label: `${u.estanteUbicacion} · ${u.pasilloUbicacion}`,
                     }))}
+                    error={erroresLinea.ubicacion}
                   />
                 </div>
               </div>

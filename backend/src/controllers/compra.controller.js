@@ -1,4 +1,11 @@
 const { crearOrdenCompra, obtenerOrdenesCompra, obtenerOrdenCompraPorId, registrarIngresoBodega} = require('../models/compra.model');
+const {
+    MENSAJES,
+    normalizarTexto,
+    esCodigoLote,
+    esCantidadEntera,
+    esPrecioDecimal
+} = require('../utils/validators');
 
 // --- ÓRDENES DE COMPRA ---
 async function registrarOrden(req, res) {
@@ -17,11 +24,16 @@ async function registrarOrden(req, res) {
                     message: 'Cada ítem de la orden debe incluir idProducto, cantidadSolicitada y precioAcordado.'
                 });
             }
-            const cant = Number(item.cantidadSolicitada);
-            if (isNaN(cant) || !Number.isInteger(cant) || cant <= 0) {
+            if (!esCantidadEntera(item.cantidadSolicitada)) {
                 return res.status(400).json({
                     status: 'error',
                     message: `La cantidad solicitada para cada producto debe ser un número entero mayor a cero (recibido: ${item.cantidadSolicitada}).`
+                });
+            }
+            if (!esPrecioDecimal(item.precioAcordado)) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: `El precio acordado debe ser un número decimal mayor a cero con máximo 2 decimales (recibido: ${item.precioAcordado}).`
                 });
             }
         }
@@ -78,20 +90,36 @@ async function recibirIngresoBodega(req, res) {
         }
 
         for (const item of lotesConCantidad) {
-            if (!item.idProducto || !item.idUbicacionBodega || !item.codigoLote || !item.costoUnitario) {
+            const costoVacio = item.costoUnitario === undefined || item.costoUnitario === null || item.costoUnitario === '';
+            if (!item.idProducto || !item.idUbicacionBodega || !item.codigoLote || costoVacio) {
                 return res.status(400).json({
                     status: 'error',
                     message: 'Cada lote recibido debe especificar idProducto, idUbicacionBodega, codigoLote y costoUnitario.'
                 });
             }
-            const cant = Number(item.cantidadRecibida);
-            if (isNaN(cant) || !Number.isInteger(cant) || cant <= 0) {
+            if (!esCodigoLote(item.codigoLote)) {
+                return res.status(400).json({ status: 'error', message: MENSAJES.CODIGO_LOTE });
+            }
+            if (!esCantidadEntera(item.cantidadRecibida)) {
                 return res.status(400).json({
                     status: 'error',
                     message: `La cantidad recibida debe ser un número entero mayor a cero (recibido: ${item.cantidadRecibida}).`
                 });
             }
+            if (!esPrecioDecimal(item.costoUnitario)) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: `El costo unitario debe ser un número decimal mayor a cero con máximo 2 decimales (recibido: ${item.costoUnitario}).`
+                });
+            }
         }
+
+        const lotesNormalizados = lotesConCantidad.map((item) => ({
+            ...item,
+            codigoLote: normalizarTexto(item.codigoLote),
+            cantidadRecibida: Number(item.cantidadRecibida),
+            costoUnitario: Number(item.costoUnitario)
+        }));
 
         const docEntrega = (numeroDocumentoEntrega && String(numeroDocumentoEntrega).trim())
             ? String(numeroDocumentoEntrega).trim()
@@ -101,7 +129,7 @@ async function recibirIngresoBodega(req, res) {
             idOrdenCompra,
             idUsuario,
             docEntrega,
-            lotesConCantidad
+            lotesNormalizados
         );
 
         res.status(201).json({

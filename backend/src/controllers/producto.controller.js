@@ -1,4 +1,38 @@
 const { crearProducto, obtenerProductos, obtenerProductoPorId, actualizarProducto, eliminarProducto } = require('../models/producto.model');
+const {
+    MENSAJES,
+    normalizarTexto,
+    esNombreProducto,
+    esCodigoProducto,
+    esPrecioDecimal
+} = require('../utils/validators');
+
+// El color puede ser "N/A" (sin color aplicable) además del formato de nombre permitido.
+function validarColor(colorProducto) {
+    const color = normalizarTexto(colorProducto);
+    if (color === '') return true;
+    if (color.toUpperCase() === 'N/A') return true;
+    return esNombreProducto(color);
+}
+
+function validarProducto(codigoProducto, nombreProducto, marcaProducto, colorProducto, precioVentaProducto) {
+    if (!esCodigoProducto(codigoProducto)) {
+        return MENSAJES.CODIGO_PRODUCTO;
+    }
+    if (!esNombreProducto(nombreProducto)) {
+        return `Nombre del producto: ${MENSAJES.NOMBRE_PRODUCTO}`;
+    }
+    if (!esNombreProducto(marcaProducto)) {
+        return `Marca: ${MENSAJES.NOMBRE_PRODUCTO}`;
+    }
+    if (!validarColor(colorProducto)) {
+        return `Color: ${MENSAJES.NOMBRE_PRODUCTO}`;
+    }
+    if (!esPrecioDecimal(precioVentaProducto)) {
+        return MENSAJES.PRECIO_DECIMAL;
+    }
+    return null;
+}
 
 async function registrar(req, res) {
     try {
@@ -8,17 +42,26 @@ async function registrar(req, res) {
             return res.status(400).json({ status: 'error', message: 'Faltan campos obligatorios para registrar el producto.' });
         }
 
-        if (isNaN(precioVentaProducto) || Number(precioVentaProducto) <= 0) {
-            return res.status(400).json({ status: 'error', message: 'El precio de venta debe ser un número mayor a 0.' });
+        const errorValidacion = validarProducto(
+            codigoProducto,
+            nombreProducto,
+            marcaProducto,
+            colorProducto,
+            precioVentaProducto
+        );
+        if (errorValidacion) {
+            return res.status(400).json({ status: 'error', message: errorValidacion });
         }
+
+        const colorNormalizado = normalizarTexto(colorProducto);
 
         const idProducto = await crearProducto(
             idCategoria, 
             idMedidaPresentacion, 
-            codigoProducto.trim(), 
-            nombreProducto.trim(), 
-            marcaProducto.trim(), 
-            colorProducto ? colorProducto.trim() : null, 
+            normalizarTexto(codigoProducto), 
+            normalizarTexto(nombreProducto), 
+            normalizarTexto(marcaProducto), 
+            colorNormalizado ? colorNormalizado : null, 
             Number(precioVentaProducto)
         );
 
@@ -68,18 +111,27 @@ async function actualizar(req, res) {
             return res.status(400).json({ status: 'error', message: 'Faltan campos obligatorios para actualizar el producto.' });
         }
 
-        if (isNaN(precioVentaProducto) || Number(precioVentaProducto) <= 0) {
-            return res.status(400).json({ status: 'error', message: 'El precio de venta debe ser un número mayor a 0.' });
+        const errorValidacion = validarProducto(
+            codigoProducto,
+            nombreProducto,
+            marcaProducto,
+            colorProducto,
+            precioVentaProducto
+        );
+        if (errorValidacion) {
+            return res.status(400).json({ status: 'error', message: errorValidacion });
         }
+
+        const colorNormalizado = normalizarTexto(colorProducto);
 
         const filasAfectadas = await actualizarProducto(
             id, 
             idCategoria, 
             idMedidaPresentacion, 
-            codigoProducto.trim(), 
-            nombreProducto.trim(), 
-            marcaProducto.trim(), 
-            colorProducto ? colorProducto.trim() : null, 
+            normalizarTexto(codigoProducto), 
+            normalizarTexto(nombreProducto), 
+            normalizarTexto(marcaProducto), 
+            colorNormalizado ? colorNormalizado : null, 
             Number(precioVentaProducto)
         );
 

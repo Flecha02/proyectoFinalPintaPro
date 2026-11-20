@@ -8,11 +8,24 @@ import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
 import { buscarClientes, registrarCliente, registrarCotizacion } from '../../../lib/api';
 import { useToast } from '../../../context/ToastContext';
+import {
+  MENSAJES,
+  esNit,
+  esNombreCliente,
+  esTelefono,
+  normalizarTexto,
+} from '../../../lib/validators';
 
 export interface ModalCotizacionProps {
   isOpen: boolean;
   onClose: () => void;
   onCotizacionExitosa: (idCotizacion: number) => void;
+}
+
+interface ErroresCotizacion {
+  nit?: string;
+  nombre?: string;
+  telefono?: string;
 }
 
 export const ModalCotizacion: React.FC<ModalCotizacionProps> = ({
@@ -33,6 +46,7 @@ export const ModalCotizacion: React.FC<ModalCotizacionProps> = ({
   const [buscando, setBuscando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  const [errores, setErrores] = useState<ErroresCotizacion>({});
 
   const handleBuscarNit = async () => {
     if (!nit.trim()) return;
@@ -57,13 +71,30 @@ export const ModalCotizacion: React.FC<ModalCotizacionProps> = ({
     }
   };
 
+  const validar = (nitFinal: string): ErroresCotizacion => {
+    const nuevosErrores: ErroresCotizacion = {};
+
+    if (!esNit(nitFinal)) {
+      nuevosErrores.nit = MENSAJES.NIT;
+    }
+    if (!esNombreCliente(nombre)) {
+      nuevosErrores.nombre = MENSAJES.NOMBRE_CLIENTE;
+    }
+    if (normalizarTexto(telefono) !== '' && !esTelefono(telefono)) {
+      nuevosErrores.telefono = MENSAJES.TELEFONO;
+    }
+
+    return nuevosErrores;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0 || !user?.idUsuario) return;
-    if (!nombre.trim()) {
-      const msg = 'El nombre del cliente es obligatorio.';
-      setError(msg);
-      mostrarError(msg);
+
+    const nitFinal = normalizarTexto(nit) || 'CF';
+    const nuevosErrores = validar(nitFinal);
+    setErrores(nuevosErrores);
+    if (Object.keys(nuevosErrores).length > 0) {
       return;
     }
 
@@ -72,13 +103,12 @@ export const ModalCotizacion: React.FC<ModalCotizacionProps> = ({
 
     try {
       let clienteId = idCliente;
-      const nitFinal = nit.trim() || 'CF';
       if (!clienteId) {
         const resCliente = await registrarCliente({
           nitCliente: nitFinal,
-          nombreCliente: nombre.trim(),
-          telefonoCliente: telefono.trim(),
-          direccionCliente: direccion.trim(),
+          nombreCliente: normalizarTexto(nombre),
+          telefonoCliente: normalizarTexto(telefono),
+          direccionCliente: normalizarTexto(direccion),
         });
         clienteId = resCliente.data.idCliente;
       }
@@ -116,7 +146,7 @@ export const ModalCotizacion: React.FC<ModalCotizacionProps> = ({
       description={`Cotización por un total de Q ${total.toFixed(2)} (${items.length} productos).`}
       maxWidth="lg"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {error && (
           <div className="p-3 bg-red-50 text-red-700 rounded-xl text-xs font-semibold" role="alert">
             {error}
@@ -124,7 +154,7 @@ export const ModalCotizacion: React.FC<ModalCotizacionProps> = ({
         )}
 
         {/* Buscador de NIT */}
-        <div className="flex gap-2 items-end">
+        <div className="flex gap-2 items-start">
           <div className="flex-1">
             <Input
               label="NIT del Cliente"
@@ -134,7 +164,10 @@ export const ModalCotizacion: React.FC<ModalCotizacionProps> = ({
               onChange={(e) => {
                 setNit(e.target.value);
                 setIdCliente(null);
+                setErrores((prev) => ({ ...prev, nit: undefined }));
               }}
+              error={errores.nit}
+              helperText="CF, C/F o formato guatemalteco válido."
             />
           </div>
           <Button
@@ -142,6 +175,7 @@ export const ModalCotizacion: React.FC<ModalCotizacionProps> = ({
             variant="outline"
             onClick={handleBuscarNit}
             cargando={buscando}
+            className="mt-6"
           >
             Buscar NIT
           </Button>
@@ -152,7 +186,12 @@ export const ModalCotizacion: React.FC<ModalCotizacionProps> = ({
           placeholder="Nombre completo o Razón Social"
           required
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={(e) => {
+            setNombre(e.target.value);
+            setErrores((prev) => ({ ...prev, nombre: undefined }));
+          }}
+          error={errores.nombre}
+          helperText="Solo letras, tildes, ñ, espacios, puntos y comas."
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -160,7 +199,12 @@ export const ModalCotizacion: React.FC<ModalCotizacionProps> = ({
             label="Teléfono"
             placeholder="ej. 5555-1234"
             value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
+            onChange={(e) => {
+              setTelefono(e.target.value);
+              setErrores((prev) => ({ ...prev, telefono: undefined }));
+            }}
+            error={errores.telefono}
+            helperText="8 dígitos, opcionalmente con guion."
           />
           <Input
             label="Dirección"

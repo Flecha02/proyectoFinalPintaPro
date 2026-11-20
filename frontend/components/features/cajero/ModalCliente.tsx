@@ -8,12 +8,25 @@ import { Alert } from '../../ui/Alert';
 import { Cliente } from '../../../lib/types';
 import { actualizarCliente, registrarCliente } from '../../../lib/api';
 import { useToast } from '../../../context/ToastContext';
+import {
+  MENSAJES,
+  esNit,
+  esNombreCliente,
+  esTelefono,
+  normalizarTexto,
+} from '../../../lib/validators';
 
 export interface ModalClienteProps {
   isOpen: boolean;
   onClose: () => void;
   clienteAEditar?: Cliente | null;
   onGuardadoExitoso: (cliente: Cliente, esNuevo: boolean) => void;
+}
+
+interface ErroresCliente {
+  nombre?: string;
+  nit?: string;
+  telefono?: string;
 }
 
 export const ModalCliente: React.FC<ModalClienteProps> = ({
@@ -30,6 +43,7 @@ export const ModalCliente: React.FC<ModalClienteProps> = ({
   const [esCF, setEsCF] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errores, setErrores] = useState<ErroresCliente>({});
 
   useEffect(() => {
     if (isOpen) {
@@ -47,6 +61,7 @@ export const ModalCliente: React.FC<ModalClienteProps> = ({
         setEsCF(false);
       }
       setError(null);
+      setErrores({});
     }
   }, [isOpen, clienteAEditar]);
 
@@ -54,6 +69,7 @@ export const ModalCliente: React.FC<ModalClienteProps> = ({
     setEsCF(checked);
     if (checked) {
       setNit('CF');
+      setErrores((prev) => ({ ...prev, nit: undefined }));
     } else if (nit === 'CF') {
       setNit('');
     }
@@ -63,64 +79,80 @@ export const ModalCliente: React.FC<ModalClienteProps> = ({
     const upper = val.toUpperCase();
     setNit(upper);
     setEsCF(upper === 'CF');
+    setErrores((prev) => ({ ...prev, nit: undefined }));
+  };
+
+  const validar = (nitFinal: string): ErroresCliente => {
+    const nuevosErrores: ErroresCliente = {};
+
+    if (!esNombreCliente(nombre)) {
+      nuevosErrores.nombre = MENSAJES.NOMBRE_CLIENTE;
+    }
+    if (!esNit(nitFinal)) {
+      nuevosErrores.nit = MENSAJES.NIT;
+    }
+    if (normalizarTexto(telefono) !== '' && !esTelefono(telefono)) {
+      nuevosErrores.telefono = MENSAJES.TELEFONO;
+    }
+
+    return nuevosErrores;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!nombre.trim()) {
-      const msg = 'El nombre del cliente es obligatorio.';
-      setError(msg);
-      mostrarError(msg);
+    // Regla solicitada: si no tiene NIT, se asigna 'CF' en automático
+    const nitFinal = normalizarTexto(nit) === '' ? 'CF' : normalizarTexto(nit).toUpperCase();
+
+    const nuevosErrores = validar(nitFinal);
+    setErrores(nuevosErrores);
+    if (Object.keys(nuevosErrores).length > 0) {
       return;
     }
-
-    // Regla solicitada: si no tiene NIT, se asigna 'CF' en automático
-    const nitFinal = nit.trim() === '' ? 'CF' : nit.trim().toUpperCase();
 
     setCargando(true);
     try {
       if (clienteAEditar) {
         await actualizarCliente(clienteAEditar.idCliente, {
-          nombreCliente: nombre.trim(),
+          nombreCliente: normalizarTexto(nombre),
           nitCliente: nitFinal,
-          telefonoCliente: telefono.trim() ? telefono.trim() : null,
-          direccionCliente: direccion.trim() ? direccion.trim() : null,
+          telefonoCliente: normalizarTexto(telefono) ? normalizarTexto(telefono) : null,
+          direccionCliente: normalizarTexto(direccion) ? normalizarTexto(direccion) : null,
         });
 
         onGuardadoExitoso(
           {
             idCliente: clienteAEditar.idCliente,
-            nombreCliente: nombre.trim(),
+            nombreCliente: normalizarTexto(nombre),
             nitCliente: nitFinal,
-            telefonoCliente: telefono.trim() || null,
-            direccionCliente: direccion.trim() || null,
+            telefonoCliente: normalizarTexto(telefono) || null,
+            direccionCliente: normalizarTexto(direccion) || null,
           },
           false,
         );
       } else {
         const resp = await registrarCliente({
-          nombreCliente: nombre.trim(),
+          nombreCliente: normalizarTexto(nombre),
           nitCliente: nitFinal,
-          telefonoCliente: telefono.trim() || null,
-          direccionCliente: direccion.trim() || null,
+          telefonoCliente: normalizarTexto(telefono) || null,
+          direccionCliente: normalizarTexto(direccion) || null,
         });
 
         onGuardadoExitoso(
           {
             idCliente: resp.data?.idCliente || Date.now(),
-            nombreCliente: nombre.trim(),
+            nombreCliente: normalizarTexto(nombre),
             nitCliente: nitFinal,
-            telefonoCliente: telefono.trim() || null,
-            direccionCliente: direccion.trim() || null,
+            telefonoCliente: normalizarTexto(telefono) || null,
+            direccionCliente: normalizarTexto(direccion) || null,
           },
           true,
         );
       }
       onClose();
-    } catch (err: any) {
-      const msg = err.message || 'Error al guardar el cliente';
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al guardar el cliente';
       setError(msg);
       mostrarError(msg);
     } finally {
@@ -136,15 +168,20 @@ export const ModalCliente: React.FC<ModalClienteProps> = ({
       description="Completa los datos del cliente para facturación y cotizaciones."
       maxWidth="lg"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {error && <Alert tipo="error" mensaje={error} />}
 
         <Input
           label="Nombre o Razón Social"
           required
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={(e) => {
+            setNombre(e.target.value);
+            setErrores((prev) => ({ ...prev, nombre: undefined }));
+          }}
           placeholder="Ej. Juan Pérez o Comercial La Pintura S.A."
+          error={errores.nombre}
+          helperText="Solo letras, tildes, ñ, espacios, puntos y comas (2 a 150 caracteres)."
           leftIcon={
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -179,25 +216,38 @@ export const ModalCliente: React.FC<ModalClienteProps> = ({
               value={nit}
               onChange={(e) => handleNitChange(e.target.value)}
               placeholder="Ej. 1234567-8 o dejar vacío para 'CF'"
-              className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition duration-150"
+              aria-invalid={Boolean(errores.nit)}
+              className={`w-full pl-9 pr-3.5 py-2.5 bg-white border rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 transition duration-150 ${
+                errores.nit
+                  ? 'border-red-400 focus:ring-red-500/20 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-blue-500/20 focus:border-blue-600'
+              }`}
             />
           </div>
-          <p className="text-xs text-gray-500">
-            {nit.trim() === '' || nit.trim().toUpperCase() === 'CF' ? (
-              <span className="text-emerald-700 font-medium">✓ Se registrará como &apos;CF&apos; (Consumidor Final) automáticamente.</span>
-            ) : (
-              <span>NIT o DPI sin guiones o con formato estándar de Guatemala.</span>
-            )}
-          </p>
+          {errores.nit ? (
+            <p className="text-xs text-red-600 font-medium">{errores.nit}</p>
+          ) : (
+            <p className="text-xs text-gray-500">
+              {nit.trim() === '' || nit.trim().toUpperCase() === 'CF' ? (
+                <span className="text-emerald-700 font-medium">✓ Se registrará como &apos;CF&apos; (Consumidor Final) automáticamente.</span>
+              ) : (
+                <span>Formato guatemalteco válido (ej. 1234567-8 o 1234567K).</span>
+              )}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Teléfono (opcional)"
             value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
+            onChange={(e) => {
+              setTelefono(e.target.value);
+              setErrores((prev) => ({ ...prev, telefono: undefined }));
+            }}
             placeholder="Ej. 5555-1234"
-            helperText="Formato válido de 8 dígitos para Guatemala."
+            error={errores.telefono}
+            helperText="Exactamente 8 dígitos, opcionalmente con guion."
             leftIcon={
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />

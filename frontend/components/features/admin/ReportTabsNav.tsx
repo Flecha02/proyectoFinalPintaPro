@@ -12,9 +12,10 @@ export interface TabOption {
 export interface ReportTabsNavProps {
   activo: number;
   onSelect: (id: number) => void;
+  esGerente?: boolean;
 }
 
-export const ReportTabsNav: React.FC<ReportTabsNavProps> = ({ activo, onSelect }) => {
+export const ReportTabsNav: React.FC<ReportTabsNavProps> = ({ activo, onSelect, esGerente = false }) => {
   const tabs: TabOption[] = [
     { id: 1, label: '1. Ventas por Medio de Pago', icon: '💳' },
     { id: 2, label: '2. Top Ingresos', icon: '💰' },
@@ -24,6 +25,10 @@ export const ReportTabsNav: React.FC<ReportTabsNavProps> = ({ activo, onSelect }
     { id: 6, label: '6. Productos Agotados', icon: '⚠️' },
     { id: 7, label: '7. Consultar Factura', icon: '🧾' },
   ];
+
+  if (esGerente) {
+    tabs.push({ id: 8, label: '8. Gestión de Usuarios', icon: '👥' });
+  }
 
   return (
     <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-xs overflow-x-auto">

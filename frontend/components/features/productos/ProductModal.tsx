@@ -6,6 +6,13 @@ import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
 import { Select } from '../../ui/Select';
 import { Button } from '../../ui/Button';
+import {
+  MENSAJES,
+  esCodigoProducto,
+  esNombreProducto,
+  esPrecioDecimal,
+  normalizarTexto,
+} from '../../../lib/validators';
 
 export interface ProductModalProps {
   isOpen: boolean;
@@ -25,6 +32,16 @@ export interface ProductModalProps {
   }) => Promise<void>;
 }
 
+interface ErroresProducto {
+  codigo?: string;
+  nombre?: string;
+  idCategoria?: string;
+  marca?: string;
+  color?: string;
+  idMedida?: string;
+  precio?: string;
+}
+
 export const ProductModal: React.FC<ProductModalProps> = ({
   isOpen,
   onClose,
@@ -42,6 +59,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const [precio, setPrecio] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+  const [errores, setErrores] = useState<ErroresProducto>({});
 
   useEffect(() => {
     if (productoEditar) {
@@ -66,64 +84,79 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       setPrecio('');
     }
     setError('');
+    setErrores({});
   }, [productoEditar, isOpen, categorias, medidas]);
 
   // Reglas de negocio según categoría
   const categoriaSeleccionadaNombre = categorias.find((c) => c.idCategoria === Number(idCategoria))?.nombreCategoria;
   const esAccesorio = categoriaSeleccionadaNombre === 'Accesorios';
-  const esBarnizOSolvente = categoriaSeleccionadaNombre === 'Barniz' || categoriaSeleccionadaNombre === 'Solventes';
+  const esBarnizOSolvente = categoriaSeleccionadaNombre === 'Barnices' || categoriaSeleccionadaNombre === 'Solventes';
+  const colorNoAplica = esAccesorio || esBarnizOSolvente;
 
   const handleCategoriaChange = (nuevaId: number) => {
     setIdCategoria(nuevaId);
+    setErrores((prev) => ({ ...prev, idCategoria: undefined }));
     const cat = categorias.find((c) => c.idCategoria === nuevaId);
     if (cat?.nombreCategoria === 'Accesorios') {
       setColor('N/A');
-    } else if (cat?.nombreCategoria === 'Barniz' || cat?.nombreCategoria === 'Solventes') {
+    } else if (cat?.nombreCategoria === 'Barnices' || cat?.nombreCategoria === 'Solventes') {
       setColor('N/A');
     } else if (color === 'N/A') {
       setColor('');
     }
   };
 
+  const validar = (): ErroresProducto => {
+    const nuevosErrores: ErroresProducto = {};
+    const codigoNormalizado = normalizarTexto(codigo);
+    const nombreNormalizado = normalizarTexto(nombre);
+    const marcaNormalizada = normalizarTexto(marca);
+    const colorNormalizado = normalizarTexto(color);
+
+    if (!idCategoria) {
+      nuevosErrores.idCategoria = 'Debes seleccionar una categoría.';
+    }
+    if (!idMedida) {
+      nuevosErrores.idMedida = 'Debes seleccionar una presentación.';
+    }
+    if (!esCodigoProducto(codigoNormalizado)) {
+      nuevosErrores.codigo = MENSAJES.CODIGO_PRODUCTO;
+    }
+    if (!esNombreProducto(nombreNormalizado)) {
+      nuevosErrores.nombre = MENSAJES.NOMBRE_PRODUCTO;
+    }
+    if (!esNombreProducto(marcaNormalizada)) {
+      nuevosErrores.marca = MENSAJES.NOMBRE_PRODUCTO;
+    }
+    if (!colorNoAplica && colorNormalizado !== '' && colorNormalizado.toUpperCase() !== 'N/A' && !esNombreProducto(colorNormalizado)) {
+      nuevosErrores.color = MENSAJES.NOMBRE_PRODUCTO;
+    }
+    if (!esPrecioDecimal(precio)) {
+      nuevosErrores.precio = MENSAJES.PRECIO_DECIMAL;
+    }
+
+    return nuevosErrores;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!idCategoria || !idMedida) {
-      setError('Debes seleccionar categoría y presentación.');
-      return;
-    }
-    if (Number(precio) <= 0) {
-      setError('El precio debe ser un monto mayor a 0.');
-      return;
-    }
+    setError('');
 
-    const soloLetrasRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/;
-
-    if (!marca.trim()) {
-      setError('Debes ingresar la marca del producto.');
+    const nuevosErrores = validar();
+    setErrores(nuevosErrores);
+    if (Object.keys(nuevosErrores).length > 0) {
       return;
-    }
-    if (!soloLetrasRegex.test(marca.trim())) {
-      setError('La marca solo puede contener letras y espacios.');
-      return;
-    }
-
-    if (!esAccesorio && !esBarnizOSolvente && color.trim() && color.trim() !== 'N/A') {
-      if (!soloLetrasRegex.test(color.trim())) {
-        setError('El color solo puede contener letras y espacios.');
-        return;
-      }
     }
 
     setCargando(true);
-    setError('');
     try {
       await onGuardar({
         idProducto: productoEditar?.idProducto,
-        codigoProducto: codigo.trim(),
-        nombreProducto: nombre.trim(),
+        codigoProducto: normalizarTexto(codigo),
+        nombreProducto: normalizarTexto(nombre),
         idCategoria: Number(idCategoria),
-        marcaProducto: marca.trim(),
-        colorProducto: esAccesorio || esBarnizOSolvente ? 'N/A' : (color.trim() || 'N/A'),
+        marcaProducto: normalizarTexto(marca),
+        colorProducto: colorNoAplica ? 'N/A' : (normalizarTexto(color) || 'N/A'),
         idMedidaPresentacion: Number(idMedida),
         precioVentaProducto: Number(precio),
       });
@@ -143,7 +176,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       description="Completa los datos del producto para el catálogo oficial."
       maxWidth="xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {error && (
           <div className="p-3 bg-red-50 text-red-700 rounded-xl text-xs font-semibold" role="alert">
             {error}
@@ -156,7 +189,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             required
             placeholder="ej. PINT-VIN-001"
             value={codigo}
-            onChange={(e) => setCodigo(e.target.value)}
+            onChange={(e) => {
+              setCodigo(e.target.value);
+              setErrores((prev) => ({ ...prev, codigo: undefined }));
+            }}
+            error={errores.codigo}
+            helperText="Solo alfanumérico y guiones (3 a 20 caracteres)."
           />
 
           <Select
@@ -168,6 +206,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               value: c.idCategoria,
               label: c.nombreCategoria,
             }))}
+            error={errores.idCategoria}
           />
         </div>
 
@@ -176,7 +215,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           required
           placeholder="ej. Pintura Acrílica Vinil Mate"
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={(e) => {
+            setNombre(e.target.value);
+            setErrores((prev) => ({ ...prev, nombre: undefined }));
+          }}
+          error={errores.nombre}
+          helperText="Solo letras, tildes, ñ y espacios (2 a 100 caracteres)."
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -185,17 +229,25 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             required
             placeholder="ej. PintaPro, Truper, Celco"
             value={marca}
-            onChange={(e) => setMarca(e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, ''))}
+            onChange={(e) => {
+              setMarca(e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, ''));
+              setErrores((prev) => ({ ...prev, marca: undefined }));
+            }}
+            error={errores.marca}
             helperText="Solo se permiten letras y espacios"
           />
 
           <Input
             label="Color"
-            disabled={esAccesorio || esBarnizOSolvente}
-            placeholder={esAccesorio || esBarnizOSolvente ? 'No aplica' : 'ej. Blanco, Rojo Óxido'}
-            value={esAccesorio || esBarnizOSolvente ? 'N/A' : color}
-            onChange={(e) => setColor(e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, ''))}
-            helperText={esAccesorio || esBarnizOSolvente ? 'Fijado en N/A para esta categoría' : 'Solo se permiten letras y espacios'}
+            disabled={colorNoAplica}
+            placeholder={colorNoAplica ? 'No aplica' : 'ej. Blanco, Rojo Óxido'}
+            value={colorNoAplica ? 'N/A' : color}
+            onChange={(e) => {
+              setColor(e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, ''));
+              setErrores((prev) => ({ ...prev, color: undefined }));
+            }}
+            error={errores.color}
+            helperText={colorNoAplica ? 'Fijado en N/A para esta categoría' : 'Solo se permiten letras y espacios'}
           />
         </div>
 
@@ -204,11 +256,15 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             label="Presentación / Medida"
             required
             value={idMedida}
-            onChange={(e) => setIdMedida(Number(e.target.value))}
+            onChange={(e) => {
+              setIdMedida(Number(e.target.value));
+              setErrores((prev) => ({ ...prev, idMedida: undefined }));
+            }}
             options={medidas.map((m) => ({
               value: m.idMedidaPresentacion,
               label: m.descripcionMedida,
             }))}
+            error={errores.idMedida}
           />
 
           <Input
@@ -219,7 +275,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             min="0.01"
             placeholder="0.00"
             value={precio}
-            onChange={(e) => setPrecio(e.target.value)}
+            onChange={(e) => {
+              setPrecio(e.target.value);
+              setErrores((prev) => ({ ...prev, precio: undefined }));
+            }}
+            error={errores.precio}
+            helperText="Monto decimal mayor a 0 (máximo 2 decimales)."
           />
         </div>
 

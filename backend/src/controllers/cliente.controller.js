@@ -5,36 +5,49 @@ const {
     actualizarCliente, 
     eliminarCliente 
 } = require('../models/cliente.model');
-// Validaciones para Guatemala (NIT, DPI y Teléfono)
-function validarNitDpi(valor) {
-    if (!valor) return false;
-    const limpio = valor.trim().toUpperCase();
-    if (limpio === 'CF' || limpio === 'C.F.') return true;
-    const regexNitDpi = /^([0-9]+-?[0-9K]{1}|[0-9]{13})$/;
-    return regexNitDpi.test(limpio);
+const {
+    MENSAJES,
+    normalizarTexto,
+    esNombreCliente,
+    esNit,
+    esTelefono
+} = require('../utils/validators');
+
+function validarDatosCliente(nitCliente, nombreCliente, telefonoCliente) {
+    const nit = normalizarTexto(nitCliente).toUpperCase();
+    const nombre = normalizarTexto(nombreCliente);
+    const telefono = normalizarTexto(telefonoCliente);
+
+    if (!esNombreCliente(nombre)) {
+        return MENSAJES.NOMBRE_CLIENTE;
+    }
+    if (!esNit(nit)) {
+        return MENSAJES.NIT;
+    }
+    // El teléfono es opcional, pero si se envía debe tener el formato correcto.
+    if (telefono !== '' && !esTelefono(telefono)) {
+        return MENSAJES.TELEFONO;
+    }
+    return null;
 }
-function validarTelefonoGT(telefono) {
-    if (!telefono) return true;
-    const regexTel = /^(\+?502)?[\s-]?[2-7][0-9]{3}[\s-]?[0-9]{4}$/;
-    return regexTel.test(telefono.trim());
-}
+
 async function registrar(req, res) {
     try {
         const { nitCliente, nombreCliente, telefonoCliente, direccionCliente } = req.body;
-        if (!nombreCliente || nombreCliente.trim() === '') {
-            return res.status(400).json({ status: 'error', message: 'El nombre del cliente es obligatorio.' });
+
+        const errorValidacion = validarDatosCliente(nitCliente, nombreCliente, telefonoCliente);
+        if (errorValidacion) {
+            return res.status(400).json({ status: 'error', message: errorValidacion });
         }
-        if (!validarNitDpi(nitCliente)) {
-            return res.status(400).json({ status: 'error', message: 'El formato del NIT o DPI no es válido.' });
-        }
-        if (!validarTelefonoGT(telefonoCliente)) {
-            return res.status(400).json({ status: 'error', message: 'El teléfono del cliente no es un formato válido para Guatemala.' });
-        }
+
+        const telefono = normalizarTexto(telefonoCliente);
+        const direccion = normalizarTexto(direccionCliente);
+
         const idCliente = await crearCliente(
-            nitCliente.trim(), 
-            nombreCliente.trim(), 
-            telefonoCliente ? telefonoCliente.trim() : null, 
-            direccionCliente ? direccionCliente.trim() : null
+            normalizarTexto(nitCliente).toUpperCase(), 
+            normalizarTexto(nombreCliente), 
+            telefono ? telefono : null, 
+            direccion ? direccion : null
         );
         res.status(201).json({
             status: 'success',
@@ -48,6 +61,7 @@ async function registrar(req, res) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 }
+
 async function listar(req, res) {
     try {
         const { busqueda } = req.query; // Captura ?busqueda=...
@@ -57,6 +71,7 @@ async function listar(req, res) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 }
+
 async function buscarPorId(req, res) {
     try {
         const { id } = req.params;
@@ -69,25 +84,26 @@ async function buscarPorId(req, res) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 }
+
 async function actualizar(req, res) {
     try {
         const { id } = req.params;
         const { nitCliente, nombreCliente, telefonoCliente, direccionCliente } = req.body;
-        if (!nombreCliente || nombreCliente.trim() === '') {
-            return res.status(400).json({ status: 'error', message: 'El nombre del cliente es obligatorio.' });
+
+        const errorValidacion = validarDatosCliente(nitCliente, nombreCliente, telefonoCliente);
+        if (errorValidacion) {
+            return res.status(400).json({ status: 'error', message: errorValidacion });
         }
-        if (!validarNitDpi(nitCliente)) {
-            return res.status(400).json({ status: 'error', message: 'El formato del NIT o DPI no es válido.' });
-        }
-        if (!validarTelefonoGT(telefonoCliente)) {
-            return res.status(400).json({ status: 'error', message: 'El teléfono del cliente no es un formato válido para Guatemala.' });
-        }
+
+        const telefono = normalizarTexto(telefonoCliente);
+        const direccion = normalizarTexto(direccionCliente);
+
         const filasAfectadas = await actualizarCliente(
             id, 
-            nitCliente.trim(), 
-            nombreCliente.trim(), 
-            telefonoCliente ? telefonoCliente.trim() : null, 
-            direccionCliente ? direccionCliente.trim() : null
+            normalizarTexto(nitCliente).toUpperCase(), 
+            normalizarTexto(nombreCliente), 
+            telefono ? telefono : null, 
+            direccion ? direccion : null
         );
         if (filasAfectadas === 0) {
             return res.status(404).json({ status: 'error', message: 'Cliente no encontrado para actualizar.' });
@@ -119,6 +135,7 @@ async function eliminar(req, res) {
         res.status(400).json({ status: 'error', message: error.message });
     }
 }
+
 module.exports = {
     registrar,
     listar,

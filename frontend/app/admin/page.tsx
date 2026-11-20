@@ -12,6 +12,8 @@ import { ReporteInventarioActual } from '../../components/features/admin/Reporte
 import { ReporteMenosVendidos } from '../../components/features/admin/ReporteMenosVendidos';
 import { ReporteProductosAgotados } from '../../components/features/admin/ReporteProductosAgotados';
 import { ReporteBuscarFactura } from '../../components/features/admin/ReporteBuscarFactura';
+import { UsuariosSection } from '../../components/features/admin/UsuariosSection';
+import { useAuth } from '../../context/AuthContext';
 import {
   obtenerReporteInventarioActual,
   obtenerReporteProductosAgotados,
@@ -22,6 +24,8 @@ import {
 } from '../../lib/api';
 
 export default function AdminPage() {
+  const { hasRole } = useAuth();
+  const esGerente = hasRole('GERENTE');
   const [tabActivo, setTabActivo] = useState<number>(1);
   const [fechaInicio, setFechaInicio] = useState('2026-10-01');
   const [fechaFin, setFechaFin] = useState('2026-11-30');
@@ -81,7 +85,7 @@ export default function AdminPage() {
           description="Monitoreo financiero, control de inventario y estadísticas de ventas de PintaPro."
         />
 
-        <ReportTabsNav activo={tabActivo} onSelect={setTabActivo} />
+        <ReportTabsNav activo={tabActivo} onSelect={setTabActivo} esGerente={esGerente} />
 
         {requiereFiltroFechas && (
           <ReportDateFilter
@@ -139,6 +143,8 @@ export default function AdminPage() {
           )}
 
           {tabActivo === 7 && <ReporteBuscarFactura />}
+
+          {tabActivo === 8 && esGerente && <UsuariosSection />}
         </div>
       </main>
     </RoleGuard>
